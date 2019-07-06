@@ -1,0 +1,5 @@
+rootProject.name = 'shade'
+rootProject.name = 'shade'
+
+
+enableFeaturePreview('GRADLE_METADATA')

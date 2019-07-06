@@ -1,0 +1,29 @@
+plugins {
+    id 'org.jetbrains.kotlin.jvm' version '1.3.40'
+}
+repositories {
+    mavenCentral()
+    jcenter()
+    maven { url 'https://kotlin.bintray.com/kotlin-js-wrappers' }
+}
+group 'net.justmachinery'
+version '0.0.1'
+
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
+    api "org.jetbrains.kotlinx:kotlinx-html-jvm:0.6.12"
+    api "org.jetbrains:kotlin-css-jvm:1.0.0-pre.73-kotlin-1.3.40"
+    implementation 'com.google.code.gson:gson:2.8.5'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.0-M2'
+    
+    //Logging
+    api "org.slf4j:slf4j-api:1.7.25"
+    implementation "io.github.microutils:kotlin-logging:1.6.22"
+    
+    testCompile group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.3'
+    testCompile group: 'ch.qos.logback', name: 'logback-core', version: '1.2.3'
+    testCompile "org.slf4j:jcl-over-slf4j:1.7.25"
+
+    testImplementation "com.sparkjava:spark-core:2.8.0"
+}

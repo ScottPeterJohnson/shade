@@ -1,0 +1,3 @@
+Copy React:
+-Components are instances which take Props
+-Generate ComponentTemplates
