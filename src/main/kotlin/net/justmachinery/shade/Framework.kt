@@ -5,6 +5,8 @@ import kotlinx.html.FlowOrPhrasingContent
 import kotlinx.html.HtmlBlockTag
 import kotlinx.html.script
 import kotlinx.html.unsafe
+import net.justmachinery.shade.render.renderInternal
+import net.justmachinery.shade.render.updateRender
 import org.intellij.lang.annotations.Language
 import java.util.*
 import java.util.concurrent.atomic.AtomicLong
@@ -20,6 +22,13 @@ class ShadeContext {
 
     var currentlyRenderingComponent : Component<*>? = null
     val needReRender = mutableSetOf<Component<*>>()
+
+    fun triggerReRender(){
+        needReRender.forEach {
+            it.updateRender()
+        }
+        needReRender.clear()
+    }
 
     internal fun getCallback(id : Long) : suspend (String?)->Unit {
         return storedCallbacks[id]!!
@@ -72,12 +81,6 @@ class ShadeContext {
     }
 }
 
-data class ComponentHierarchyIdentifier(
-    val parent : ComponentHierarchyIdentifier?,
-    val componentClass: KClass<out Component<*>>
-)
-
-
 
 class ShadeRoot(
     val endpoint : String
@@ -100,20 +103,19 @@ class ShadeRoot(
         }
         cb(context)
     }
-    fun <T> component(builder : HtmlBlockTag, componentSpec: ComponentSpec<T>){
+    fun <T : Any> component(builder : HtmlBlockTag, root : KClass<out Component<T>>, props : T){
         shade(builder){ context ->
-            builder.run {
-                val props = ComponentProps(
-                    context = ComponentContext(context, ComponentHierarchyIdentifier(null, componentSpec.clazz)),
-                    key = null,
-                    props = componentSpec.props
-                )
-                val component = componentSpec.clazz.java.getDeclaredConstructor(ComponentProps::class.java).newInstance(props)
-                ComponentHandle(context, component).run {
-                    renderInternal()
-                }
-                component.afterMount()
+            val propObj = ComponentProps(
+                context = context,
+                key = null,
+                props = props,
+                kClass = root
+            )
+            val component = root.java.getDeclaredConstructor(ComponentProps::class.java).newInstance(propObj)
+            component.run {
+                renderInternal(builder)
             }
+            component.afterMount()
         }
     }
 
@@ -129,9 +131,13 @@ class ShadeRoot(
 
         suspend fun onMessage(message : String){
             if(clientData == null){
-                clientId = UUID.fromString(message)
-                clientData = clientDataMap[clientId!!]!!
-                clientData!!.setHandler(this)
+                clientId = UUID.fromString(message)!!
+                clientData = clientDataMap[clientId]
+                if(clientData == null){
+                    send("window.location.reload(true)")
+                } else {
+                    clientData!!.setHandler(this)
+                }
             } else {
                 val parts = message.split('|', limit = 2)
                 val callbackId = parts.first().toLong()

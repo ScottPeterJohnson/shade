@@ -60,12 +60,7 @@ class ServerTest {
                     baos.writer().buffered().use {
                         it.appendHTML().html {
                             body {
-                                root.component(this, ComponentSpec(
-                                    clazz = PseudocodeComponent::class,
-                                    props = Unit,
-                                    key = null
-                                ))
-
+                                root.component(this, PseudocodeComponent::class, Unit)
                             }
                         }
                     }
