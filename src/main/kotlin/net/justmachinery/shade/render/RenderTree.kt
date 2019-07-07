@@ -94,6 +94,9 @@ internal fun renderTreeTagRecorder(parentTag : HtmlBlockTag, renderState: Compon
     }
 }
 
+/**
+ * Call unmount on any components in oldRoot not present in the same location as newRoot
+ */
 internal fun unmountDiffInRenderTrees(oldRoot : RenderTreeLocation, newRoot : RenderTreeLocation){
     if(oldRoot.tagName != newRoot.tagName){
         unmountAll(oldRoot)
@@ -105,7 +108,7 @@ internal fun unmountDiffInRenderTrees(oldRoot : RenderTreeLocation, newRoot : Re
                 unmountDiffInRenderTrees(oldChild.child, newChild.child)
             } else if (oldChild != newChild){
                 when (oldChild) {
-                    is RenderTreeChild.ComponentChild -> oldChild.component.beforeUnmount()
+                    is RenderTreeChild.ComponentChild -> oldChild.component.unmounted()
                     is RenderTreeChild.TagChild -> unmountAll(oldChild.child)
                 }
             }
@@ -117,7 +120,7 @@ private fun unmountAll(root : RenderTreeLocation){
     root.children.forEach {
         when (it) {
             is RenderTreeChild.TagChild -> unmountAll(it.child)
-            is RenderTreeChild.ComponentChild -> it.component.beforeUnmount()
+            is RenderTreeChild.ComponentChild -> it.component.unmounted()
         }
     }
 }

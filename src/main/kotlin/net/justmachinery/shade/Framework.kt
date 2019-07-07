@@ -1,47 +1,145 @@
 package net.justmachinery.shade
 
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.html.FlowOrPhrasingContent
 import kotlinx.html.HtmlBlockTag
-import kotlinx.html.script
-import kotlinx.html.unsafe
+import mu.KLogging
 import net.justmachinery.shade.render.renderInternal
 import net.justmachinery.shade.render.updateRender
 import org.intellij.lang.annotations.Language
 import java.util.*
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
-import kotlin.reflect.KClass
 
-
-class ShadeContext {
-    private val nextCallbackId : AtomicLong = AtomicLong(0)
-    private val storedCallbacks = Collections.synchronizedMap(mutableMapOf<Long, suspend (String?)->Unit>())
-    private val handlerLock = Object()
-    private var handler : ShadeRoot.MessageHandler? = null
-    private val javascriptQueue = Collections.synchronizedList(mutableListOf<String>())
-
-    var currentlyRenderingComponent : Component<*>? = null
-    val needReRender = mutableSetOf<Component<*>>()
-
-    fun triggerReRender(){
-        needReRender.forEach {
-            it.updateRender()
+/**
+ * Stores and manages state for a particular client connection.
+ */
+class ClientContext(private val id : UUID) {
+    companion object : KLogging()
+    private inline fun <T> logging(cb: ()->T) : T {
+        return withLoggingInfo("shadeClientId" to id.toString()){
+            cb()
         }
-        needReRender.clear()
+    }
+    /**
+     * We track the currently rendering component so that we can implicitly add its dependencies
+     */
+    private var currentlyRenderingComponent : Component<*>? = null
+    fun getCurrentlyRenderingComponent() = currentlyRenderingComponent
+    /**
+     * Properly set and reset the currently rendering component around cb
+     */
+    internal fun withComponentRendering(component : Component<*>, cb : ()->Unit){
+        val old = currentlyRenderingComponent
+        currentlyRenderingComponent = component
+        try {
+            cb()
+        } finally {
+            currentlyRenderingComponent = old
+        }
     }
 
-    internal fun getCallback(id : Long) : suspend (String?)->Unit {
+    /**
+     * Set of components known to be dirty and require rerendering
+     */
+    private val needReRender = Collections.synchronizedSet(mutableSetOf<Component<*>>())
+
+    internal fun setComponentsDirty(components : Set<Component<*>>) = logging {
+        logger.debug { "Set dirty: ${components.joinToString(",")}" }
+        needReRender.addAll(components)
+        triggerReRender()
+    }
+
+    private val renderLock = Object()
+    private var renderingThread : Thread? = null
+
+    /**
+     * Is this thread currently rendering for this client?
+     */
+    internal fun isRenderingThread() : Boolean {
+        return renderingThread == Thread.currentThread()
+    }
+
+    /**
+     * Render a root component
+     */
+    internal fun renderRoot(builder : HtmlBlockTag, component : Component<*>) = logging {
+        logger.debug { "Rendering root $component" }
+        synchronized(renderLock){
+            renderingThread = Thread.currentThread()
+            try {
+                component.run {
+                    renderInternal(builder)
+                }
+                component.mounted()
+            } finally {
+                renderingThread = null
+            }
+        }
+    }
+
+    /**
+     * Re-render dirty components
+     */
+    private fun triggerReRender() = logging {
+        if(batchReRenders.get() == 0){
+            synchronized(renderLock){
+                renderingThread = Thread.currentThread()
+                try {
+                    val ordered = synchronized(needReRender) {
+                        val result = needReRender.sortedBy { it.treeDepth }
+                        needReRender.clear()
+                        result
+                    }
+                    logger.debug { "Rerendering: ${ordered.joinToString(",")}" }
+                    ordered.forEach {
+                        it.updateRender()
+                    }
+                } finally {
+                    renderingThread = null
+                }
+            }
+        }
+    }
+
+    private val batchReRenders = AtomicInteger(0)
+    private suspend fun batchingReRenders(cb: suspend ()->Unit){
+        try {
+            batchReRenders.incrementAndGet()
+            cb()
+        } finally {
+            batchReRenders.decrementAndGet()
+        }
+        triggerReRender()
+    }
+
+    private val nextCallbackId : AtomicLong = AtomicLong(0)
+    private val storedCallbacks = Collections.synchronizedMap(mutableMapOf<Long, suspend (String?)->Unit>())
+
+    internal suspend fun callCallback(id : Long, data : String?) = logging {
+        logger.trace { "Calling callback $id with data ${data?.ellipsizeAfter(100)}" }
+        batchingReRenders {
+            getCallback(id)(data)
+        }
+    }
+    private fun getCallback(id : Long) : suspend (String?)->Unit {
         return storedCallbacks[id]!!
     }
     internal fun removeCallback(id : Long){
+        logger.trace { "Cleanup callback $id" }
         storedCallbacks.remove(id)
     }
-    internal fun storeCallback(cb : suspend (String?)->Unit) : Long {
+    private fun storeCallback(cb : suspend (String?)->Unit) : Long {
         val id = nextCallbackId.incrementAndGet()
+        logger.trace { "Create callback $id" }
         storedCallbacks[id] = cb
         return id
     }
-    internal fun sendJavascript(javascript : String){
+
+    private val handlerLock = Object()
+    private var handler : ShadeRoot.MessageHandler? = null
+    private val javascriptQueue = Collections.synchronizedList(mutableListOf<String>())
+    private fun sendJavascript(javascript : String) = logging {
+        logger.trace { "Sending javascript: ${javascript.ellipsizeAfter(200)}" }
         synchronized(handlerLock){
             if(handler != null){
                 handler!!.send(javascript)
@@ -51,8 +149,9 @@ class ShadeContext {
         }
 
     }
-    internal fun setHandler(handler : ShadeRoot.MessageHandler){
+    internal fun setHandler(handler : ShadeRoot.MessageHandler) = logging {
         synchronized(handlerLock){
+            logger.info { "Client connected, handler set" }
             this.handler = handler
             javascriptQueue.forEach {
                 handler.send(it)
@@ -61,9 +160,9 @@ class ShadeContext {
         }
     }
 
-    fun callbackString(cb : suspend ()->Unit) : String {
+    fun callbackString(cb : suspend ()->Unit) : Pair<Long, String> {
         val id = storeCallback { cb() }
-        return "javascript:window.shade($id)"
+        return id to "javascript:window.shade($id)"
     }
     fun executeScript(@Language("JavaScript 1.8") js : String) {
         sendJavascript(js)
@@ -81,74 +180,3 @@ class ShadeContext {
     }
 }
 
-
-class ShadeRoot(
-    val endpoint : String
-) {
-    companion object {
-        private val shadeScript = ClassLoader.getSystemClassLoader().getResource("shade.js")!!.readText()
-    }
-    private fun shade(builder : FlowOrPhrasingContent, cb : (ShadeContext)-> Unit){
-        val id = UUID.randomUUID()
-        val context = ShadeContext()
-        clientDataMap[id] = context
-        builder.run {
-            script {
-                async = true
-                unsafe {
-                    //language=JavaScript 1.8
-                    raw("window.shadeEndpoint = \"$endpoint\";\nwindow.shadeId = \"$id\";$shadeScript")
-                }
-            }
-        }
-        cb(context)
-    }
-    fun <T : Any> component(builder : HtmlBlockTag, root : KClass<out Component<T>>, props : T){
-        shade(builder){ context ->
-            val propObj = ComponentProps(
-                context = context,
-                key = null,
-                props = props,
-                kClass = root
-            )
-            val component = root.java.getDeclaredConstructor(ComponentProps::class.java).newInstance(propObj)
-            component.run {
-                renderInternal(builder)
-            }
-            component.afterMount()
-        }
-    }
-
-    fun handler(send : (String)->Unit) = MessageHandler(send)
-
-    private val clientDataMap = Collections.synchronizedMap(mutableMapOf<UUID, ShadeContext>())
-
-    inner class MessageHandler internal constructor(
-        val send : (String)->Unit
-    ) {
-        private var clientId : UUID? = null
-        private var clientData : ShadeContext? = null
-
-        suspend fun onMessage(message : String){
-            if(clientData == null){
-                clientId = UUID.fromString(message)!!
-                clientData = clientDataMap[clientId]
-                if(clientData == null){
-                    send("window.location.reload(true)")
-                } else {
-                    clientData!!.setHandler(this)
-                }
-            } else {
-                val parts = message.split('|', limit = 2)
-                val callbackId = parts.first().toLong()
-                val data = if(parts.size > 1) parts[1] else null
-                (clientData!!.getCallback(callbackId))(data)
-            }
-        }
-        fun onDisconnect(){
-            clientId?.let {
-                clientDataMap.remove(it)
-            }
-        }
-    }
-}

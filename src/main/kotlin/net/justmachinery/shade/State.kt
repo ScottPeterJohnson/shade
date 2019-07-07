@@ -2,20 +2,37 @@ package net.justmachinery.shade
 
 import kotlin.reflect.KProperty
 
-class ClientState<T>(private val context : ShadeContext, private var initial : T) {
+class ClientObservableState<T>(private val context : ClientContext, private var initial : T) {
     private val dependentComponents = mutableSetOf<Component<*>>()
-    operator fun getValue(thisRef: Any?, property: KProperty<*>): T {
-        context.currentlyRenderingComponent?.let {
-            dependentComponents.add(it)
+
+    var value : T
+        get() {
+            if(context.isRenderingThread()){
+                context.getCurrentlyRenderingComponent()?.let {
+                    dependentComponents.add(it)
+                }
+            }
+            return initial
         }
-        return initial
+        set(v) {
+            if(context.isRenderingThread()){
+                throw IllegalStateException("State cannot be set from inside render")
+            }
+            context.setComponentsDirty(dependentComponents)
+            initial = v
+        }
+    operator fun getValue(thisRef: Any?, property: KProperty<*>): T {
+        return value
     }
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: T) {
-        if(context.currentlyRenderingComponent != null){
-            throw IllegalStateException("State cannot be set from inside render")
-        }
-        context.needReRender.addAll(dependentComponents)
-        initial = value
-        context.triggerReRender()
+        this.value = value
     }
+
+    override fun toString() = value.toString()
+    override fun equals(other: Any?) = if(other is ClientObservableState<*>){
+        value == other.value
+    } else {
+        value == other
+    }
+    override fun hashCode() = value.hashCode()
 }

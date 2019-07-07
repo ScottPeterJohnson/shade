@@ -1,8 +1,6 @@
 package net.justmachinery.shade.render
 
-import kotlinx.html.HtmlBlockTag
-import kotlinx.html.div
-import kotlinx.html.id
+import kotlinx.html.*
 import kotlinx.html.stream.appendHTML
 import net.justmachinery.shade.Component
 import net.justmachinery.shade.ComponentProps
@@ -13,31 +11,38 @@ import kotlin.reflect.KClass
 internal data class ComponentRenderState(
     val componentId : UUID = UUID.randomUUID(),
     var renderTreeRoot : RenderTreeLocation? = null,
-    var location : RenderTreeLocationFrame? = null
+    var location : RenderTreeLocationFrame? = null,
+    val lastRenderCallbackIds : MutableList<Long> = mutableListOf()
 )
 
 internal fun Component<*>.renderInternal(tag : HtmlBlockTag){
-    val oldRendering = context.currentlyRenderingComponent
-    context.currentlyRenderingComponent = this
-    tag.div {
-        try {
+    renderState.lastRenderCallbackIds.forEach {
+        context.removeCallback(it)
+    }
+    renderState.lastRenderCallbackIds.clear()
+    context.withComponentRendering(this){
+        tag.div {
             id = renderState.componentId.toString()
             updateRenderTree(renderState){
-                this.render()
+                try {
+                    this.render()
+                } catch(t : Throwable){
+                    if(!this@renderInternal.onCatch(t)){
+                        throw t
+                    }
+                }
             }
-        } finally {
-            context.currentlyRenderingComponent = oldRendering
         }
     }
-
 }
 
 internal fun Component<*>.updateRender(){
     val html = ByteArrayOutputStream().let { baos ->
         baos.writer().buffered().use {
-            it.appendHTML().div {
-                renderInternal(this)
-            }
+            val consumer = it.appendHTML()
+            val tag = DIV(attributesMapOf(), consumer)
+            renderInternal(tag)
+            consumer.finalize()
         }
         baos.toByteArray()
     }
@@ -58,7 +63,7 @@ internal fun <T : Any> addComponent(
     comp.run {
         renderInternal(block)
     }
-    comp.afterMount()
+    comp.mounted()
 
     parent.renderState.location?.let { it.renderTreeChildIndex += 1 }
 }
@@ -83,7 +88,8 @@ private fun <T : Any> getOrConstructComponent(
             context = parent.context,
             props = props,
             key = key,
-            kClass = component
+            kClass = component,
+            treeDepth = parent.treeDepth + 1
         )
     )
 }

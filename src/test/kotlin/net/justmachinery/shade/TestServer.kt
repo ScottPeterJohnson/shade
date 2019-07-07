@@ -2,6 +2,8 @@ package net.justmachinery.shade
 
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
+import kotlinx.css.Color
+import kotlinx.css.backgroundColor
 import kotlinx.html.*
 import kotlinx.html.stream.appendHTML
 import org.eclipse.jetty.websocket.api.Session
@@ -14,40 +16,75 @@ import java.io.ByteArrayOutputStream
 import java.util.*
 
 
+fun DIV.testBackground(){
+    fun gen() = Random().nextInt(255).toString(16).padStart(2, '0')
+
+    withStyle {
+        backgroundColor = Color("#${gen()}${gen()}${gen()}")
+    }
+}
+
+class RootComponent(props : ComponentProps<Unit>) : Component<Unit>(props) {
+    var todo by observable(emptyList<String>())
+    var counter = observable(0)
+    override fun HtmlBlockTag.render() {
+        div {
+            testBackground()
+            div {
+                +"Hello!"
+                add(SubComponent::class, Unit)
+            }
+            div {
+                todo.forEach {
+                    div {
+                        +"TODO: $it"
+                    }
+                }
+            }
+            val newTaskName = captureInput {
+                type = InputType.text
+            }
+            button {
+                onClick = callbackString {
+                    todo = todo + newTaskName.value.await()
+                }
+                +"New!"
+            }
+            div {
+                button {
+                    onClick = callbackString {
+                        counter.value += 1
+                    }
+                    +"Add to counter"
+                }
+            }
+            div {
+                +"The counter is: "
+                add(SubComponentShowingCounter::class, counter)
+            }
+        }
+    }
+}
 
 class SubComponent(props : ComponentProps<Unit>) : Component<Unit>(props) {
     override fun HtmlBlockTag.render() {
         div {
+            testBackground()
             +"I am sub-component; hear me roar"
         }
     }
 }
 
-class PseudocodeComponent(props : ComponentProps<Unit>) : Component<Unit>(props) {
-    var todo by state(emptyList<String>())
+class SubComponentShowingCounter(props : ComponentProps<ClientObservableState<Int>>) : Component<ClientObservableState<Int>>(props) {
     override fun HtmlBlockTag.render() {
         div {
-            +"Hello!"
-            add(SubComponent::class, Unit)
-        }
-        div {
-            todo.forEach {
-                div {
-                    +"TODO: $it"
-                }
-            }
-        }
-        val newTaskName = captureInput {
-            type = InputType.text
-        }
-        button {
-            onClick = callbackString {
-                todo = todo + newTaskName.value.await()
-            }
-            +"New!"
+            testBackground()
+            +"Counter is $props"
         }
     }
 }
+
+
 
 
 class ServerTest {
@@ -60,7 +97,9 @@ class ServerTest {
                     baos.writer().buffered().use {
                         it.appendHTML().html {
                             body {
-                                root.component(this, PseudocodeComponent::class, Unit)
+                                root.installFramework(this){ context ->
+                                    root.component(context, this, RootComponent::class, Unit)
+                                }
                             }
                         }
                     }
