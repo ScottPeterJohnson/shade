@@ -2,3 +2,4 @@
 build/
 .idea/
 gradlew.bat
+gradle.properties
