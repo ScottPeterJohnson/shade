@@ -22,6 +22,7 @@ internal fun <RenderIn : Tag> Component<*, RenderIn>.renderInternal(tag : Render
     renderState.lastRenderCallbackIds.forEach {
         context.removeCallback(it)
     }
+    context.hasReRendered?.add(this)
     renderState.lastRenderCallbackIds.clear()
     context.withComponentRendering(this){
         if(addMarkers) SCRIPT(mapOf(
@@ -49,7 +50,7 @@ internal fun <RenderIn : Tag> Component<*, RenderIn>.renderInternal(tag : Render
 internal fun <RenderIn : Tag> Component<*, RenderIn>.updateRender(clazz : KClass<out RenderIn>){
     val html = ByteArrayOutputStream().let { baos ->
         baos.writer().buffered().use {
-            val consumer = it.appendHTML()
+            val consumer = it.appendHTML(prettyPrint = false)
             val tag = clazz.java.getDeclaredConstructor(Map::class.java, TagConsumer::class.java).newInstance(emptyMap<String,String>(), consumer)
             renderInternal(tag, addMarkers = false)
             consumer.finalize()

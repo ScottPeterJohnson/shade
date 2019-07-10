@@ -28,7 +28,7 @@ internal fun <T : Tag> T.updateRenderTree(
 ){
     val oldRenderTree = renderState.renderTreeRoot
 
-    val newRoot = RenderTreeLocation(null, tagName)
+    val newRoot = RenderTreeLocation(null, "(root)")
     renderState.renderTreeRoot = newRoot
 
     val frame = RenderTreeLocationFrame(
@@ -52,8 +52,32 @@ internal fun <T : Tag> renderTreeTagRecorder(parentTag : T, renderState: Compone
     val frameStack = Stack<RenderTreeLocationFrame>()
     frameStack.push(renderState.location!!)
     val consumer = parentTag.consumer
-    val newConsumer = object : TagConsumer<Any?> by consumer {
-        override fun onTagStart(tag: Tag) {
+    val newConsumer = RenderTreeRecorderConsumer(
+        base = if(consumer is RenderTreeRecorderConsumer) consumer.base else consumer,
+        frameStack = frameStack,
+        renderState = renderState
+    )
+
+    val field = parentTag::class.java.getDeclaredField("consumer").also { it.isAccessible = true }
+    field.set(parentTag, newConsumer)
+    try {
+        parentTag.run {
+            cb()
+        }
+    } finally {
+        field.set(parentTag, consumer)
+    }
+
+    return parentTag
+}
+
+internal class RenderTreeRecorderConsumer(
+    val base : TagConsumer<*>,
+    val frameStack : Stack<RenderTreeLocationFrame>,
+    val renderState: ComponentRenderState
+) : TagConsumer<Any?> by base {
+    override fun onTagStart(tag: Tag) {
+        if(tag.tagName != "script" || tag.attributes["type"] != "shade"){
             val oldFrame = frameStack.peek()
             val child = RenderTreeLocation(
                 parent = oldFrame.newRenderTreeLocation,
@@ -73,36 +97,26 @@ internal fun <T : Tag> renderTreeTagRecorder(parentTag : T, renderState: Compone
             oldFrame.renderTreeChildIndex += 1
 
             renderState.location = newFrame
-
-            consumer.onTagStart(tag)
         }
-        override fun onTagEnd(tag: Tag) {
+
+        base.onTagStart(tag)
+    }
+    override fun onTagEnd(tag: Tag) {
+        if(tag.tagName != "script" || tag.attributes["type"] != "shade") {
             val endingFrame = frameStack.pop()
             val parentFrame = frameStack.peek()
             //The tree should only include nodes with component leaves, as that's what we care about.
             endingFrame.newRenderTreeLocation.let {
-                if(it.children.isNotEmpty()){
+                if (true || it.children.isNotEmpty()) {
                     parentFrame?.newRenderTreeLocation?.children?.add(RenderTreeChild.TagChild(it))
                 }
             }
 
             renderState.location = parentFrame
-
-            consumer.onTagEnd(tag)
         }
-    }
 
-    val field = parentTag::class.java.getDeclaredField("consumer").also { it.isAccessible = true }
-    field.set(parentTag, newConsumer)
-    try {
-        parentTag.run {
-            cb()
-        }
-    } finally {
-        field.set(parentTag, consumer)
+        base.onTagEnd(tag)
     }
-
-    return parentTag
 }
 
 /**

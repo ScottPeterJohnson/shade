@@ -42,7 +42,14 @@ class ClientContext(private val id : UUID) {
      * Set of components known to be dirty and require rerendering
      */
     private val needReRender = Collections.synchronizedSet(mutableSetOf<Component<*,*>>())
+    /**
+     * Used to avoid excessive rerender of a component when doing batched rendering, as its parent may rerender it.
+     */
+    internal var hasReRendered: MutableSet<Component<*,*>>? = null
 
+    /**
+     * Flag components dirty, and queue a rerender
+     */
     internal fun setComponentsDirty(components : List<Component<*,*>>) = logging {
         logger.debug { "Set dirty: ${components.joinToString(",")}" }
         needReRender.addAll(components)
@@ -84,7 +91,11 @@ class ClientContext(private val id : UUID) {
         if(batchReRenders.get() == 0){
             synchronized(renderLock){
                 renderingThread = Thread.currentThread()
+                val rerendered = mutableSetOf<Component<*,*>>()
+                hasReRendered = rerendered
                 try {
+                    //We render from the top of the tree hierarchy down, to avoid excessive rerenders when a parent and
+                    //some child both depend on some state marked dirty.
                     val ordered = synchronized(needReRender) {
                         val result = needReRender.sortedBy { it.treeDepth }
                         needReRender.clear()
@@ -92,10 +103,13 @@ class ClientContext(private val id : UUID) {
                     }
                     logger.debug { "Rerendering: ${ordered.joinToString(",")}" }
                     ordered.forEach {
-                        @Suppress("UNCHECKED_CAST")
-                        (it as Component<*, Tag>).updateRender(it.renderIn)
+                        if(!rerendered.contains(it)){
+                            @Suppress("UNCHECKED_CAST")
+                            (it as Component<*, Tag>).updateRender(it.renderIn)
+                        }
                     }
                 } finally {
+                    hasReRendered = null
                     renderingThread = null
                 }
             }

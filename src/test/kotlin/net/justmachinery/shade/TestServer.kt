@@ -94,7 +94,11 @@ class TableRowComponent(props : Props<Int>) : Component<Int, TBODY>(props) {
     override fun TBODY.render() {
         tr {
             td {
-                +"Hello!"
+                div {
+                    testBackground()
+                    +"Hello!"
+                }
+
             }
             td {
                 +"I am $props"
@@ -115,7 +119,7 @@ class ServerTest {
             get("/test"){ request, response ->
                 ByteArrayOutputStream().let { baos ->
                     baos.writer().buffered().use {
-                        it.appendHTML().html {
+                        it.appendHTML(prettyPrint = false).html {
                             body {
                                 root.installFramework(this){ context ->
                                     root.component(context, this, RootComponent::class, Unit)
