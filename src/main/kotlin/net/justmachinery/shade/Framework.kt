@@ -1,7 +1,7 @@
 package net.justmachinery.shade
 
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.html.HtmlBlockTag
+import kotlinx.html.Tag
 import mu.KLogging
 import net.justmachinery.shade.render.renderInternal
 import net.justmachinery.shade.render.updateRender
@@ -23,12 +23,12 @@ class ClientContext(private val id : UUID) {
     /**
      * We track the currently rendering component so that we can implicitly add its dependencies
      */
-    private var currentlyRenderingComponent : Component<*>? = null
+    private var currentlyRenderingComponent : Component<*,*>? = null
     fun getCurrentlyRenderingComponent() = currentlyRenderingComponent
     /**
      * Properly set and reset the currently rendering component around cb
      */
-    internal fun withComponentRendering(component : Component<*>, cb : ()->Unit){
+    internal fun withComponentRendering(component : Component<*,*>, cb : ()->Unit){
         val old = currentlyRenderingComponent
         currentlyRenderingComponent = component
         try {
@@ -41,9 +41,9 @@ class ClientContext(private val id : UUID) {
     /**
      * Set of components known to be dirty and require rerendering
      */
-    private val needReRender = Collections.synchronizedSet(mutableSetOf<Component<*>>())
+    private val needReRender = Collections.synchronizedSet(mutableSetOf<Component<*,*>>())
 
-    internal fun setComponentsDirty(components : Set<Component<*>>) = logging {
+    internal fun setComponentsDirty(components : List<Component<*,*>>) = logging {
         logger.debug { "Set dirty: ${components.joinToString(",")}" }
         needReRender.addAll(components)
         triggerReRender()
@@ -62,13 +62,13 @@ class ClientContext(private val id : UUID) {
     /**
      * Render a root component
      */
-    internal fun renderRoot(builder : HtmlBlockTag, component : Component<*>) = logging {
+    internal fun <RenderIn : Tag> renderRoot(builder : RenderIn, component : Component<*, RenderIn>) = logging {
         logger.debug { "Rendering root $component" }
         synchronized(renderLock){
             renderingThread = Thread.currentThread()
             try {
                 component.run {
-                    renderInternal(builder)
+                    renderInternal(builder, addMarkers = true)
                 }
                 component.mounted()
             } finally {
@@ -92,7 +92,8 @@ class ClientContext(private val id : UUID) {
                     }
                     logger.debug { "Rerendering: ${ordered.joinToString(",")}" }
                     ordered.forEach {
-                        it.updateRender()
+                        @Suppress("UNCHECKED_CAST")
+                        (it as Component<*, Tag>).updateRender(it.renderIn)
                     }
                 } finally {
                     renderingThread = null

@@ -24,7 +24,7 @@ fun DIV.testBackground(){
     }
 }
 
-class RootComponent(props : ComponentProps<Unit>) : Component<Unit>(props) {
+class RootComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) {
     var todo by observable(emptyList<String>())
     var counter = observable(0)
     override fun HtmlBlockTag.render() {
@@ -62,11 +62,17 @@ class RootComponent(props : ComponentProps<Unit>) : Component<Unit>(props) {
                 +"The counter is: "
                 add(SubComponentShowingCounter::class, counter)
             }
+            table {
+                tbody {
+                    add(TableRowComponent::class, 3)
+                    add(TableRowComponent::class, 4)
+                }
+            }
         }
     }
 }
 
-class SubComponent(props : ComponentProps<Unit>) : Component<Unit>(props) {
+class SubComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) {
     override fun HtmlBlockTag.render() {
         div {
             testBackground()
@@ -75,11 +81,24 @@ class SubComponent(props : ComponentProps<Unit>) : Component<Unit>(props) {
     }
 }
 
-class SubComponentShowingCounter(props : ComponentProps<ClientObservableState<Int>>) : Component<ClientObservableState<Int>>(props) {
+class SubComponentShowingCounter(props : Props<ClientObservableState<Int>>) : Component<ClientObservableState<Int>, HtmlBlockTag>(props) {
     override fun HtmlBlockTag.render() {
         div {
             testBackground()
             +"Counter is $props"
+        }
+    }
+}
+
+class TableRowComponent(props : Props<Int>) : Component<Int, TBODY>(props) {
+    override fun TBODY.render() {
+        tr {
+            td {
+                +"Hello!"
+            }
+            td {
+                +"I am $props"
+            }
         }
     }
 }
@@ -91,6 +110,7 @@ class ServerTest {
     fun run(){
         ignite().apply {
             port(9905)
+            webSocketIdleTimeoutMillis(120 * 1000)
             webSocket("/shade", WebSocketHandler::class.java)
             get("/test"){ request, response ->
                 ByteArrayOutputStream().let { baos ->
@@ -127,6 +147,7 @@ class WebSocketHandler {
 
     @OnWebSocketMessage
     fun message(session: Session, message: String) {
+        if(message.isEmpty()) return
         GlobalScope.launch {
             sessions.getOrPut(session){
                 root.handler { session.remote.sendString(it) }

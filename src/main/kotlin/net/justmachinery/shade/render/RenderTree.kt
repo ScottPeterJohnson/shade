@@ -1,13 +1,12 @@
 package net.justmachinery.shade.render
 
-import kotlinx.html.HtmlBlockTag
 import kotlinx.html.Tag
 import kotlinx.html.TagConsumer
 import net.justmachinery.shade.Component
 import java.util.*
 
 
-internal data class RenderTreeLocation(
+internal class RenderTreeLocation(
     val parent : RenderTreeLocation?,
     val tagName : String,
     val children : MutableList<RenderTreeChild> = mutableListOf()
@@ -15,17 +14,17 @@ internal data class RenderTreeLocation(
 
 internal sealed class RenderTreeChild {
     data class TagChild(val child : RenderTreeLocation) : RenderTreeChild()
-    data class ComponentChild(val index : Int, val component : Component<*>) : RenderTreeChild()
+    data class ComponentChild(val index : Int, val component : Component<*, *>) : RenderTreeChild()
 }
 
-internal data class RenderTreeLocationFrame(
+internal class RenderTreeLocationFrame(
     var oldRenderTreeLocation: RenderTreeLocation?,
     var newRenderTreeLocation : RenderTreeLocation,
     var renderTreeChildIndex : Int = 0
 )
 
-internal fun HtmlBlockTag.updateRenderTree(
-    renderState: ComponentRenderState, cb : HtmlBlockTag.()->Unit
+internal fun <T : Tag> T.updateRenderTree(
+    renderState: ComponentRenderState, cb : T.()->Unit
 ){
     val oldRenderTree = renderState.renderTreeRoot
 
@@ -39,7 +38,7 @@ internal fun HtmlBlockTag.updateRenderTree(
 
     renderState.location = frame
 
-    renderTreeTagRecorder(this, renderState).run { cb() }
+    renderTreeTagRecorder(this, renderState){ cb() }
 
     if(oldRenderTree != null){
         unmountDiffInRenderTrees(oldRenderTree, newRoot)
@@ -49,49 +48,61 @@ internal fun HtmlBlockTag.updateRenderTree(
 }
 
 
-internal fun renderTreeTagRecorder(parentTag : HtmlBlockTag, renderState: ComponentRenderState) : HtmlBlockTag {
+internal fun <T : Tag> renderTreeTagRecorder(parentTag : T, renderState: ComponentRenderState, cb : T.()->Unit) : T {
     val frameStack = Stack<RenderTreeLocationFrame>()
     frameStack.push(renderState.location!!)
-    return object : HtmlBlockTag {
-        override val attributes get() = parentTag.attributes
-        override val attributesEntries get() = parentTag.attributesEntries
-        override val consumer = object : TagConsumer<Any?> by parentTag.consumer {
-            override fun onTagStart(tag: Tag) {
-                val oldFrame = frameStack.peek()
-                val child = RenderTreeLocation(
-                    parent = oldFrame.newRenderTreeLocation,
-                    tagName = tag.tagName
-                )
-                val oldLocation = oldFrame.oldRenderTreeLocation?.children?.getOrNull(oldFrame.renderTreeChildIndex)
-                frameStack.push(RenderTreeLocationFrame(
-                    oldRenderTreeLocation =
-                        if(oldLocation != null && oldLocation is RenderTreeChild.TagChild && oldLocation.child.tagName == tag.tagName)
-                            oldLocation.child
-                        else
-                            null,
-                    newRenderTreeLocation = child
-                ))
-                oldFrame.renderTreeChildIndex += 1
+    val consumer = parentTag.consumer
+    val newConsumer = object : TagConsumer<Any?> by consumer {
+        override fun onTagStart(tag: Tag) {
+            val oldFrame = frameStack.peek()
+            val child = RenderTreeLocation(
+                parent = oldFrame.newRenderTreeLocation,
+                tagName = tag.tagName
+            )
+            val oldLocation = oldFrame.oldRenderTreeLocation?.children?.getOrNull(oldFrame.renderTreeChildIndex)
 
-                parentTag.consumer.onTagStart(tag)
-            }
-            override fun onTagEnd(tag: Tag) {
-                val endingFrame = frameStack.pop()
-                //The tree should only include nodes with component leaves, as that's what we care about.
-                endingFrame.newRenderTreeLocation.let {
-                    if(it.children.isNotEmpty()){
-                        frameStack.peek()?.newRenderTreeLocation?.children?.add(RenderTreeChild.TagChild(it))
-                    }
-                }
+            val newFrame = RenderTreeLocationFrame(
+                oldRenderTreeLocation =
+                if(oldLocation != null && oldLocation is RenderTreeChild.TagChild && oldLocation.child.tagName == tag.tagName)
+                    oldLocation.child
+                else
+                    null,
+                newRenderTreeLocation = child
+            )
+            frameStack.push(newFrame)
+            oldFrame.renderTreeChildIndex += 1
 
-                parentTag.consumer.onTagEnd(tag)
-            }
+            renderState.location = newFrame
+
+            consumer.onTagStart(tag)
         }
-        override val emptyTag: Boolean get() = parentTag.emptyTag
-        override val inlineTag: Boolean get() = parentTag.inlineTag
-        override val namespace: String? get() = parentTag.namespace
-        override val tagName: String get() = parentTag.tagName
+        override fun onTagEnd(tag: Tag) {
+            val endingFrame = frameStack.pop()
+            val parentFrame = frameStack.peek()
+            //The tree should only include nodes with component leaves, as that's what we care about.
+            endingFrame.newRenderTreeLocation.let {
+                if(it.children.isNotEmpty()){
+                    parentFrame?.newRenderTreeLocation?.children?.add(RenderTreeChild.TagChild(it))
+                }
+            }
+
+            renderState.location = parentFrame
+
+            consumer.onTagEnd(tag)
+        }
     }
+
+    val field = parentTag::class.java.getDeclaredField("consumer").also { it.isAccessible = true }
+    field.set(parentTag, newConsumer)
+    try {
+        parentTag.run {
+            cb()
+        }
+    } finally {
+        field.set(parentTag, consumer)
+    }
+
+    return parentTag
 }
 
 /**
@@ -108,7 +119,7 @@ internal fun unmountDiffInRenderTrees(oldRoot : RenderTreeLocation, newRoot : Re
                 unmountDiffInRenderTrees(oldChild.child, newChild.child)
             } else if (oldChild != newChild){
                 when (oldChild) {
-                    is RenderTreeChild.ComponentChild -> oldChild.component.unmounted()
+                    is RenderTreeChild.ComponentChild -> oldChild.component.doUnmount()
                     is RenderTreeChild.TagChild -> unmountAll(oldChild.child)
                 }
             }
@@ -120,7 +131,7 @@ private fun unmountAll(root : RenderTreeLocation){
     root.children.forEach {
         when (it) {
             is RenderTreeChild.TagChild -> unmountAll(it.child)
-            is RenderTreeChild.ComponentChild -> it.component.unmounted()
+            is RenderTreeChild.ComponentChild -> it.component.doUnmount()
         }
     }
 }

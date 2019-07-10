@@ -1,6 +1,7 @@
 package net.justmachinery.shade
 
 import kotlinx.html.HtmlBlockTag
+import kotlinx.html.Tag
 import kotlinx.html.script
 import kotlinx.html.unsafe
 import mu.KLogging
@@ -15,15 +16,16 @@ class ShadeRoot(
         private val shadeScript = ClassLoader.getSystemClassLoader().getResource("shade.js")!!.readText()
     }
 
-    fun <T : Any> component(context : ClientContext, builder : HtmlBlockTag, root : KClass<out Component<T>>, props : T){
-        val propObj = ComponentProps(
+    fun <T : Any, RenderIn : Tag> component(context : ClientContext, builder : RenderIn, root : KClass<out Component<T, RenderIn>>, props : T){
+        val propObj = Props(
             context = context,
             key = null,
             props = props,
             kClass = root,
+            renderIn = builder::class,
             treeDepth = 0
         )
-        val component = root.java.getDeclaredConstructor(ComponentProps::class.java).newInstance(propObj)
+        val component = root.java.getDeclaredConstructor(Props::class.java).newInstance(propObj)
         context.renderRoot(builder, component)
     }
 

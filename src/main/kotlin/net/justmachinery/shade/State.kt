@@ -3,13 +3,13 @@ package net.justmachinery.shade
 import kotlin.reflect.KProperty
 
 class ClientObservableState<T>(private val context : ClientContext, private var initial : T) {
-    private val dependentComponents = mutableSetOf<Component<*>>()
+    private val dependentComponents = mutableSetOf<ComponentReference>()
 
     var value : T
         get() {
             if(context.isRenderingThread()){
                 context.getCurrentlyRenderingComponent()?.let {
-                    dependentComponents.add(it)
+                    dependentComponents.add(it.ref)
                 }
             }
             return initial
@@ -18,7 +18,18 @@ class ClientObservableState<T>(private val context : ClientContext, private var 
             if(context.isRenderingThread()){
                 throw IllegalStateException("State cannot be set from inside render")
             }
-            context.setComponentsDirty(dependentComponents)
+            val dirty = mutableListOf<Component<*,*>>()
+            val removed = mutableListOf<ComponentReference>()
+            dependentComponents.forEach {
+                val comp = it.component
+                if(comp == null){
+                    removed.add(it)
+                } else {
+                    dirty.add(comp)
+                }
+            }
+            dependentComponents.removeAll(removed)
+            context.setComponentsDirty(dirty)
             initial = v
         }
     operator fun getValue(thisRef: Any?, property: KProperty<*>): T {
@@ -29,10 +40,4 @@ class ClientObservableState<T>(private val context : ClientContext, private var 
     }
 
     override fun toString() = value.toString()
-    override fun equals(other: Any?) = if(other is ClientObservableState<*>){
-        value == other.value
-    } else {
-        value == other
-    }
-    override fun hashCode() = value.hashCode()
 }
