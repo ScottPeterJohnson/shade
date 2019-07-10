@@ -11,7 +11,7 @@
                     }
                 }
                 for(let i=0;i<other.attributes.length;i++){
-                    const attribute = dom.attributes[i].name;
+                    const attribute = other.attributes[i].name;
                     dom.setAttribute(attribute, other.getAttribute(attribute)!);
                 }
                 reconcileChildren(dom, dom.childNodes, other.childNodes);
@@ -44,15 +44,15 @@
             } else {
                 if(domChild instanceof HTMLElement &&
                     otherChild instanceof HTMLElement &&
-                    domChild.tagName == "script" &&
-                    otherChild.tagName == "script" &&
+                    domChild.tagName == "SCRIPT" &&
+                    otherChild.tagName == "SCRIPT" &&
                     domChild.id == otherChild.id &&
                     otherChild.getAttribute("data-shade-keep") != null
                 ){
                     const endId = domChild.id + "-end";
                     while(domIndex < origDom.length){
                         let skipDom = origDom[domIndex];
-                        if(skipDom instanceof HTMLElement && skipDom.tagName == "script" && skipDom.id == endId){
+                        if(skipDom instanceof HTMLElement && skipDom.tagName == "SCRIPT" && skipDom.id == endId){
                             break
                         }
                         domIndex += 1;
