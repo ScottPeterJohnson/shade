@@ -1,6 +1,9 @@
 package net.justmachinery.shade
 
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.slf4j.MDCContext
 import kotlinx.html.Tag
 import mu.KLogging
 import net.justmachinery.shade.render.renderInternal
@@ -20,6 +23,7 @@ class ClientContext(private val id : UUID) {
             cb()
         }
     }
+
     /**
      * We track the currently rendering component so that we can implicitly add its dependencies
      */
@@ -128,38 +132,100 @@ class ClientContext(private val id : UUID) {
     }
 
     private val nextCallbackId : AtomicLong = AtomicLong(0)
-    private val storedCallbacks = Collections.synchronizedMap(mutableMapOf<Long, suspend (String?)->Unit>())
+    private val storedCallbacks = Collections.synchronizedMap(mutableMapOf<Long, CallbackData>())
+    /**
+     * This is used to make processing of user events sequential
+     */
+    private var eventProcessing = false
+    private val eventQueue : Queue<Pair<suspend (String?) -> Unit, String?>> = ArrayDeque()
 
-    internal suspend fun callCallback(id : Long, data : String?) = logging {
+    internal fun callCallback(id : Long, data : String?) = logging {
         logger.trace { "Calling callback $id with data ${data?.ellipsizeAfter(100)}" }
-        batchingReRenders {
-            getCallback(id)(data)
+        val callback = getCallback(id)
+        if(callback.requireEventLock) {
+            //We need to make sure only one event callback is running at a time, and put any that should run later into
+            //a queue.
+            synchronized(eventQueue){
+                if(eventProcessing){
+                    logger.trace { "Queuing processing of callback $id" }
+                    eventQueue.add(callback.callback to data)
+                } else {
+                    logger.trace { "Starting new processing coroutine for callback $id" }
+                    eventProcessing = true
+                    GlobalScope.launch(context = MDCContext()) {
+                        batchingReRenders {
+                            runEventLockedCallback(callback.callback, data)
+                        }
+                    }
+                }
+            }
+        } else {
+            GlobalScope.launch(context = MDCContext()) {
+                batchingReRenders {
+                    try {
+                        callback.callback(data)
+                    } catch(t : Throwable){
+                        logger.error(t) { "Error processing callback" }
+                    }
+                }
+            }
         }
     }
-    private fun getCallback(id : Long) : suspend (String?)->Unit {
-        return storedCallbacks[id]!!
+
+    private suspend fun runEventLockedCallback(callback: suspend (String?) -> Unit, data: String?){
+        var currentCallback = callback
+        var currentData = data
+        while(true){
+            try {
+                currentCallback(currentData)
+            } catch(t : Throwable){
+                logger.error(t){ "Error processing event callback" }
+            }
+
+            val cb = synchronized(eventQueue){
+                if(eventQueue.isNotEmpty()){
+                    eventQueue.poll()
+                } else {
+                    eventProcessing = false
+                    null
+                }
+            }
+
+            if(cb != null){
+                currentCallback = cb.first
+                currentData = cb.second
+            } else {
+                break
+            }
+        }
+
+    }
+
+
+    private fun getCallback(id : Long) : CallbackData {
+        return storedCallbacks[id] ?: throw IllegalStateException("Unknown callback $id")
     }
     internal fun removeCallback(id : Long){
         logger.trace { "Cleanup callback $id" }
         storedCallbacks.remove(id)
     }
-    private fun storeCallback(cb : suspend (String?)->Unit) : Long {
+    private fun storeCallback(data : CallbackData) : Long {
         val id = nextCallbackId.incrementAndGet()
         logger.trace { "Create callback $id" }
-        storedCallbacks[id] = cb
+        storedCallbacks[id] = data
         return id
     }
 
     private val handlerLock = Object()
     private var handler : ShadeRoot.MessageHandler? = null
-    private val javascriptQueue = Collections.synchronizedList(mutableListOf<String>())
+    private var javascriptQueue : MutableList<String>? = Collections.synchronizedList(mutableListOf<String>())
     private fun sendJavascript(javascript : String) = logging {
         logger.trace { "Sending javascript: ${javascript.ellipsizeAfter(200)}" }
         synchronized(handlerLock){
             if(handler != null){
                 handler!!.send(javascript)
             } else {
-                javascriptQueue.add(javascript)
+                javascriptQueue!!.add(javascript)
             }
         }
 
@@ -168,22 +234,27 @@ class ClientContext(private val id : UUID) {
         synchronized(handlerLock){
             logger.info { "Client connected, handler set" }
             this.handler = handler
-            javascriptQueue.forEach {
+            javascriptQueue!!.forEach {
                 handler.send(it)
             }
-            javascriptQueue.clear()
+            javascriptQueue = null
         }
     }
 
-    fun callbackString(
+    fun eventCallbackString(
         @Language("JavaScript 1.8") prefix : String = "",
         @Language("JavaScript 1.8") suffix : String = "",
-        cb : suspend ()->Unit
+        @Language("JavaScript 1.8") data : String = "",
+        cb : suspend (String?)->Unit
     ) : Pair<Long, String> {
-        val id = storeCallback { cb() }
-        val pref = if(prefix.isNotBlank()) "(function(){ $prefix }());" else ""
-        val suff = if(suffix.isNotBlank()) ";(function(){ $suffix }())" else ""
-        return id to "javascript:${pref}window.shade($id)$suff"
+        val id = storeCallback(CallbackData(
+            callback = cb,
+            requireEventLock = true
+        ))
+        val wrappedPrefix = if(prefix.isNotBlank()) "(function(){ $prefix }());" else ""
+        val wrappedSuffix = if(suffix.isNotBlank()) ";(function(){ $suffix }())" else ""
+        val wrappedData = if(data.isNotBlank()) ",JSON.stringify($data)" else ""
+        return id to "javascript:${wrappedPrefix}window.shade($id$wrappedData)$wrappedSuffix"
     }
     fun executeScript(@Language("JavaScript 1.8") js : String) {
         sendJavascript(js)
@@ -192,12 +263,19 @@ class ClientContext(private val id : UUID) {
     fun runExpression(@Language("JavaScript 1.8", prefix = "var result = ", suffix = ";") js : String) : CompletableDeferred<String> {
         val future = CompletableDeferred<String>()
         var id : Long? = null
-        id = storeCallback {
-            removeCallback(id!!)
-            future.complete(it!!)
-        }
+        id = storeCallback(CallbackData(
+            callback = {
+                removeCallback(id!!)
+                future.complete(it!!)
+            },
+            requireEventLock = false
+        ))
         sendJavascript("var result = $js;\nwindow.shade($id, JSON.stringify(result))")
         return future
     }
 }
 
+private data class CallbackData(
+    val callback : suspend (String?)->Unit,
+    val requireEventLock : Boolean
+)

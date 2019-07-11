@@ -58,32 +58,41 @@ class ShadeRoot(
         private var clientId : UUID? = null
         private var clientData : ClientContext? = null
 
-        suspend fun onMessage(message : String){
-            withLoggingInfo("shadeClientId" to clientId.toString()){
-                logger.trace { "Message received: ${message.ellipsizeAfter(200)}" }
-                if(clientData == null){
-                    clientId = UUID.fromString(message)!!
-                    clientData = clientDataMap[clientId]
+        /**
+         * This should be called by your web framework when a websocket receives a message.
+         * Ideally, the web framework should process these messages sequentially.
+         */
+        fun onMessage(message : String){
+            synchronized(this){
+                withLoggingInfo("shadeClientId" to clientId.toString()){
+                    logger.trace { "Message received: ${message.ellipsizeAfter(200)}" }
                     if(clientData == null){
-                        logger.info { "Client ID expired or invalid: $clientId" }
-                        send("window.location.reload(true)")
+                        clientId = UUID.fromString(message)!!
+                        clientData = clientDataMap[clientId]
+                        if(clientData == null){
+                            logger.info { "Client ID expired or invalid: $clientId" }
+                            send("window.location.reload(true)")
+                        } else {
+                            clientData!!.setHandler(this@MessageHandler)
+                        }
                     } else {
-                        clientData!!.setHandler(this)
+                        val parts = message.split('|', limit = 2)
+                        val callbackId = parts.first().toLong()
+                        val data = if(parts.size > 1) parts[1] else null
+                        clientData!!.callCallback(callbackId, data)
                     }
-                } else {
-                    val parts = message.split('|', limit = 2)
-                    val callbackId = parts.first().toLong()
-                    val data = if(parts.size > 1) parts[1] else null
-                    clientData!!.callCallback(callbackId, data)
                 }
             }
         }
+
         fun onDisconnect(){
-            withLoggingInfo("shadeClientId" to clientId.toString()){
-                logger.info { "Client disconnected" }
-            }
-            clientId?.let {
-                clientDataMap.remove(it)
+            synchronized(this){
+                withLoggingInfo("shadeClientId" to clientId.toString()){
+                    logger.info { "Client disconnected" }
+                }
+                clientId?.let {
+                    clientDataMap.remove(it)
+                }
             }
         }
     }

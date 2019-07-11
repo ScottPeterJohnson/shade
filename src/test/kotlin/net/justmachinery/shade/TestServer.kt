@@ -1,7 +1,5 @@
 package net.justmachinery.shade
 
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
 import kotlinx.css.Color
 import kotlinx.css.backgroundColor
 import kotlinx.html.*
@@ -24,9 +22,14 @@ fun DIV.testBackground(){
     }
 }
 
+class SharedRootState(context : ClientContext) : StateContainer(context){
+    var text by observable("")
+}
+
 class RootComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) {
     var todo by observable(emptyList<String>())
     var counter = observable(0)
+    val sharedState = SharedRootState(context)
     override fun HtmlBlockTag.render() {
         div {
             testBackground()
@@ -45,14 +48,14 @@ class RootComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) 
                 type = InputType.text
             }
             button {
-                onClick = callbackString {
+                onClick {
                     todo = todo + newTaskName.value.await()
                 }
                 +"New!"
             }
             div {
                 button {
-                    onClick = callbackString {
+                    onClick {
                         counter.value += 1
                     }
                     +"Add to counter"
@@ -68,6 +71,8 @@ class RootComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) 
                     add(TableRowComponent::class, 4)
                 }
             }
+            add(SharedStateRender::class, sharedState)
+            add(SharedStateInput::class, sharedState)
         }
     }
 }
@@ -106,6 +111,25 @@ class TableRowComponent(props : Props<Int>) : Component<Int, TBODY>(props) {
         }
     }
 }
+
+class SharedStateRender(props : Props<SharedRootState>) : Component<SharedRootState, HtmlBlockTag>(props){
+    override fun HtmlBlockTag.render() {
+        +"You entered: ${props.text}"
+    }
+}
+
+class SharedStateInput(props : Props<SharedRootState>) : Component<SharedRootState, HtmlBlockTag>(props){
+    override fun HtmlBlockTag.render() {
+        div {
+            input {
+                onInput {
+                    props.text = it
+                }
+            }
+        }
+    }
+}
+
 
 
 
@@ -152,11 +176,10 @@ class WebSocketHandler {
     @OnWebSocketMessage
     fun message(session: Session, message: String) {
         if(message.isEmpty()) return
-        GlobalScope.launch {
-            sessions.getOrPut(session){
-                root.handler { session.remote.sendString(it) }
-            }.onMessage(message)
-        }
+
+        sessions.getOrPut(session){
+            root.handler { session.remote.sendString(it) }
+        }.onMessage(message)
     }
 }
 
