@@ -25,7 +25,7 @@ class ShadeRoot(
             renderIn = builder::class,
             treeDepth = 0
         )
-        val component = root.java.getDeclaredConstructor(Props::class.java).newInstance(propObj)
+        val component = root.java.getDeclaredConstructor(Props::class.java).also { it.isAccessible = true }.newInstance(propObj)
         context.renderRoot(builder, component)
     }
 

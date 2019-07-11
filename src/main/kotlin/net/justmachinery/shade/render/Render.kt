@@ -51,7 +51,7 @@ internal fun <RenderIn : Tag> Component<*, RenderIn>.updateRender(clazz : KClass
     val html = ByteArrayOutputStream().let { baos ->
         baos.writer().buffered().use {
             val consumer = it.appendHTML(prettyPrint = false)
-            val tag = clazz.java.getDeclaredConstructor(Map::class.java, TagConsumer::class.java).newInstance(emptyMap<String,String>(), consumer)
+            val tag = clazz.java.getDeclaredConstructor(Map::class.java, TagConsumer::class.java).also { it.isAccessible = true }.newInstance(emptyMap<String,String>(), consumer)
             renderInternal(tag, addMarkers = false)
             consumer.finalize()
         }
@@ -122,7 +122,7 @@ private fun <T : Any, RenderIn : Tag> getOrConstructComponent(
             }
         }
     }
-    return GetComponentResult.NEW to component.java.getDeclaredConstructor(Props::class.java).newInstance(
+    return GetComponentResult.NEW to component.java.getDeclaredConstructor(Props::class.java).also { it.isAccessible = true }.newInstance(
         Props(
             context = parent.context,
             props = props,

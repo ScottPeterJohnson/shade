@@ -175,9 +175,15 @@ class ClientContext(private val id : UUID) {
         }
     }
 
-    fun callbackString(cb : suspend ()->Unit) : Pair<Long, String> {
+    fun callbackString(
+        @Language("JavaScript 1.8") prefix : String = "",
+        @Language("JavaScript 1.8") suffix : String = "",
+        cb : suspend ()->Unit
+    ) : Pair<Long, String> {
         val id = storeCallback { cb() }
-        return id to "javascript:window.shade($id)"
+        val pref = if(prefix.isNotBlank()) "(function(){ $prefix }());" else ""
+        val suff = if(suffix.isNotBlank()) ";(function(){ $suffix }())" else ""
+        return id to "javascript:${pref}window.shade($id)$suff"
     }
     fun executeScript(@Language("JavaScript 1.8") js : String) {
         sendJavascript(js)

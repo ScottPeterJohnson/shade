@@ -81,7 +81,7 @@ class SubComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) {
     }
 }
 
-class SubComponentShowingCounter(props : Props<ClientObservableState<Int>>) : Component<ClientObservableState<Int>, HtmlBlockTag>(props) {
+private class SubComponentShowingCounter(props : Props<ClientObservableState<Int>>) : Component<ClientObservableState<Int>, HtmlBlockTag>(props) {
     override fun HtmlBlockTag.render() {
         div {
             testBackground()

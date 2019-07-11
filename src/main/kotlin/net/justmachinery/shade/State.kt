@@ -41,3 +41,7 @@ class ClientObservableState<T>(private val context : ClientContext, private var 
 
     override fun toString() = value.toString()
 }
+
+abstract class StateContainer(val context : ClientContext) {
+    fun <T> observable(initial : T) = ClientObservableState(context, initial)
+}
