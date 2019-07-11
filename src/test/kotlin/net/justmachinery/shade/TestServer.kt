@@ -175,7 +175,6 @@ class WebSocketHandler {
 
     @OnWebSocketMessage
     fun message(session: Session, message: String) {
-        if(message.isEmpty()) return
 
         sessions.getOrPut(session){
             root.handler { session.remote.sendString(it) }

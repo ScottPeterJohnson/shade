@@ -13,15 +13,38 @@ apply plugin: 'maven'
 apply plugin: 'maven-publish'
 
 group 'net.justmachinery'
-version '0.0.4'
+version '0.0.5'
+
+task sourcesJar(type: Jar) {
+    from sourceSets.main.allSource
+    classifier = 'sources'
+}
+
+task javadocJar(type: Jar) {
+    from javadoc
+    classifier = 'javadoc'
+}
 
 publishing {
     publications {
         shade(MavenPublication) {
             from components.java
+            artifact sourcesJar
+            artifact javadocJar
             groupId group
             artifactId name
             version project.version
+            pom {
+                name = "Shade"
+                description = "Experimental Kotlin web framework"
+                url = "https://github.com/ScottPeterJohnson/shade"
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+            }
         }
     }
 }

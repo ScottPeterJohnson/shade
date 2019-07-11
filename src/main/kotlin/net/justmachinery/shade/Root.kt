@@ -63,6 +63,7 @@ class ShadeRoot(
          * Ideally, the web framework should process these messages sequentially.
          */
         fun onMessage(message : String){
+            if(message.isEmpty()) return
             synchronized(this){
                 withLoggingInfo("shadeClientId" to clientId.toString()){
                     logger.trace { "Message received: ${message.ellipsizeAfter(200)}" }
