@@ -37,13 +37,13 @@ class RootComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) 
                 +"Hello!"
                 add(SubComponent::class, Unit)
             }
+
             div {
                 todo.forEach {
-                    div {
-                        +"TODO: $it"
-                    }
+                    add(TodoComponent::class, it)
                 }
             }
+
             val newTaskName = captureInput {
                 type = InputType.text
             }
@@ -73,6 +73,15 @@ class RootComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) 
             }
             add(SharedStateRender::class, sharedState)
             add(SharedStateInput::class, sharedState)
+        }
+    }
+}
+
+class TodoComponent(props : Props<String>) : Component<String, HtmlBlockTag>(props){
+    override fun HtmlBlockTag.render() {
+        div {
+            testBackground()
+            +"TODO: $props"
         }
     }
 }
