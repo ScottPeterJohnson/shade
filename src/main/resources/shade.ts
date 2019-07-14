@@ -14,7 +14,7 @@
                     const attribute = other.attributes[i].name;
                     dom.setAttribute(attribute, other.getAttribute(attribute)!);
                 }
-                reconcileChildren(dom, dom.childNodes, other.childNodes);
+                reconcileChildren(dom, null, dom.childNodes, other.childNodes);
                 return dom;
             }
         } else {
@@ -27,6 +27,7 @@
     }
     function reconcileChildren(
         dom : HTMLElement,
+        initialAppendAfter : Node|null,
         domChildren : ChildNodeListLike,
         otherChildren : ChildNodeListLike
     ){
@@ -34,11 +35,17 @@
         const origOther = Array.from(otherChildren);
         let domIndex = 0;
         let otherIndex = 0;
+        let domAppendAfter = initialAppendAfter;
         while(domIndex < origDom.length || otherIndex < origOther.length){
             const domChild = origDom[domIndex];
             const otherChild = origOther[otherIndex];
             if(!domChild && otherChild){
-                dom.appendChild(otherChild);
+                if(domAppendAfter === null){
+                    dom.appendChild(otherChild);
+                } else {
+                    dom.insertBefore(otherChild, domAppendAfter.nextSibling);
+                }
+                domAppendAfter = otherChild;
             } else if (domChild && !otherChild) {
                 dom.removeChild(domChild);
             } else {
@@ -53,6 +60,7 @@
                     while(domIndex < origDom.length){
                         let skipDom = origDom[domIndex];
                         if(skipDom instanceof HTMLElement && skipDom.tagName == "SCRIPT" && skipDom.id == endId){
+                            domAppendAfter = skipDom;
                             break
                         }
                         domIndex += 1;
@@ -62,6 +70,7 @@
                     if(reconciled != domChild){
                         dom.replaceChild(reconciled, domChild);
                     }
+                    domAppendAfter = reconciled;
                 }
             }
             domIndex += 1;
@@ -83,7 +92,7 @@
         }
 
 
-        reconcileChildren(target.parentElement!!, included, htmlDom.childNodes)
+        reconcileChildren(target.parentElement!!, target, included, htmlDom.childNodes)
     }
 
     if(!(window as any).shade){
