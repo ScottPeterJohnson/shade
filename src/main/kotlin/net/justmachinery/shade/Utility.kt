@@ -1,32 +1,10 @@
 package net.justmachinery.shade
 
-import com.google.gson.Gson
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.async
 import kotlinx.css.CSSBuilder
-import kotlinx.html.*
+import kotlinx.html.CommonAttributeGroupFacade
+import kotlinx.html.HtmlTagMarker
+import kotlinx.html.style
 import org.slf4j.MDC
-import java.util.*
-
-class InputReference(private val context : ClientContext, private val id : UUID) {
-    val value : Deferred<String>
-        get() = GlobalScope.async {
-            val value = context.runExpression("document.getElementById(\"$id\").value").await()
-            Gson().fromJson(value, String::class.java)
-        }
-}
-fun FlowOrInteractiveOrPhrasingContent.renderCaptureInput(
-    context : ClientContext,
-    cb : INPUT.()->Unit
-) : InputReference {
-    val inputId = UUID.randomUUID()
-    input {
-        id = inputId.toString()
-        cb()
-    }
-    return InputReference(context, inputId)
-}
 
 @HtmlTagMarker
 fun CommonAttributeGroupFacade.withStyle(builder: CSSBuilder.() -> Unit) {

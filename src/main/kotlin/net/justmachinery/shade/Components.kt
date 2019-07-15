@@ -53,7 +53,6 @@ abstract class Component<PropType : Any, RenderIn : Tag>(fullProps : Props<PropT
     open fun onCatch(throwable: Throwable) : Boolean = false
 
     //Useful helper functions and aliases
-    fun FlowOrInteractiveOrPhrasingContent.captureInput(cb : INPUT.()->Unit) = renderCaptureInput(context, cb)
     fun <T> observable(initial : T) = ClientObservableState(context, initial)
 
     private fun eventCallbackString(

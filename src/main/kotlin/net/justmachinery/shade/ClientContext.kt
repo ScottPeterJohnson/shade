@@ -273,6 +273,23 @@ class ClientContext(private val id : UUID) {
         sendJavascript("var result = $js;\nwindow.shade($id, JSON.stringify(result))")
         return future
     }
+
+    fun runWithCallback(@Language("JavaScript 1.8", prefix = "function cb(data){}; ", suffix = ";") js : String) : CompletableDeferred<String> {
+        val future = CompletableDeferred<String>()
+        var id : Long? = null
+        id = storeCallback(CallbackData(
+            callback = {
+                removeCallback(id!!)
+                future.complete(it!!)
+            },
+            requireEventLock = false
+        ))
+        sendJavascript("(function(){ function cb(data){ window.shade($id, JSON.stringify(data)) }; $js; })()")
+        return future
+    }
+    fun runPromise(@Language("JavaScript 1.8", prefix = "var result = ", suffix = ";") js : String) : CompletableDeferred<String> {
+        return runWithCallback("var result = $js; result.then(cb)")
+    }
 }
 
 private data class CallbackData(

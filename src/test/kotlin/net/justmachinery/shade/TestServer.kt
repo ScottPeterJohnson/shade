@@ -1,5 +1,7 @@
 package net.justmachinery.shade
 
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import kotlinx.css.Color
 import kotlinx.css.backgroundColor
 import kotlinx.html.*
@@ -30,6 +32,7 @@ class RootComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) 
     var todo by observable(emptyList<String>())
     var counter = observable(0)
     val sharedState = SharedRootState(context)
+    var newTaskName : String = ""
     override fun HtmlBlockTag.render() {
         div {
             testBackground()
@@ -44,12 +47,15 @@ class RootComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) 
                 }
             }
 
-            val newTaskName = captureInput {
+            input {
                 type = InputType.text
+                onChange {
+                    newTaskName = it
+                }
             }
             button {
                 onClick {
-                    todo = todo + newTaskName.value.await()
+                    todo = todo + newTaskName
                 }
                 +"New!"
             }
@@ -73,6 +79,13 @@ class RootComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) 
             }
             add(SharedStateRender::class, sharedState)
             add(SharedStateInput::class, sharedState)
+        }
+    }
+
+    override fun mounted() {
+        GlobalScope.launch {
+            val result = context.runPromise("new Promise(function(resolve, reject){ setTimeout(function(){ resolve('foo') }, 3000)})").await()
+            println("Got: $result")
         }
     }
 }
@@ -138,9 +151,6 @@ class SharedStateInput(props : Props<SharedRootState>) : Component<SharedRootSta
         }
     }
 }
-
-
-
 
 
 class ServerTest {
