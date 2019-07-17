@@ -122,7 +122,8 @@ private fun <T : Any, RenderIn : Tag> getOrConstructComponent(
             }
         }
     }
-    return GetComponentResult.NEW to component.java.getDeclaredConstructor(Props::class.java).also { it.isAccessible = true }.newInstance(
+    return GetComponentResult.NEW to parent.context.root.constructComponent(
+        component,
         Props(
             context = parent.context,
             props = props,

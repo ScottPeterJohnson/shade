@@ -1,5 +1,6 @@
 package net.justmachinery.shade
 
+import com.google.gson.Gson
 import kotlinx.html.HtmlBlockTag
 import kotlinx.html.Tag
 import kotlinx.html.script
@@ -10,10 +11,26 @@ import kotlin.reflect.KClass
 
 
 class ShadeRoot(
-    val endpoint : String
+    /**
+     * Websocket URL at which the shade endpoint will be accessible
+     */
+    val endpoint : String,
+    /**
+     * This is called after a component is constructed, and could be used to e.g. inject dependencies.
+     */
+    val afterConstructComponent : (Component<*,*>)->Unit = {},
+    val onUncaughtJavascriptException : (JavascriptError)->Unit = {
+        logger.error(it){ "Uncaught JS exception" }
+    }
 ) {
     companion object : KLogging() {
         private val shadeScript = ClassLoader.getSystemClassLoader().getResource("shade.js")!!.readText()
+    }
+
+    fun <T : Any, RenderIn : Tag> constructComponent(clazz : KClass<out Component<T, RenderIn>>, props : Props<T>) : Component<T, RenderIn> {
+        val component = clazz.java.getDeclaredConstructor(Props::class.java).also { it.isAccessible = true }.newInstance(props)!!
+        afterConstructComponent(component)
+        return component
     }
 
     fun <T : Any, RenderIn : Tag> component(context : ClientContext, builder : RenderIn, root : KClass<out Component<T, RenderIn>>, props : T){
@@ -25,13 +42,13 @@ class ShadeRoot(
             renderIn = builder::class,
             treeDepth = 0
         )
-        val component = root.java.getDeclaredConstructor(Props::class.java).also { it.isAccessible = true }.newInstance(propObj)
+        val component = constructComponent(root, propObj)
         context.renderRoot(builder, component)
     }
 
     fun installFramework(builder : HtmlBlockTag, cb : (ClientContext)-> Unit){
         val id = UUID.randomUUID()
-        val context = ClientContext(id)
+        val context = ClientContext(id, this)
         clientDataMap[id] = context
         withLoggingInfo("shadeClientId" to id.toString()){
             logger.info { "Created new client id" }
@@ -53,11 +70,14 @@ class ShadeRoot(
     private val clientDataMap = Collections.synchronizedMap(mutableMapOf<UUID, ClientContext>())
 
     inner class MessageHandler internal constructor(
-        val send : (String)->Unit
+        private val send : (String)->Unit
     ) {
         private var clientId : UUID? = null
         private var clientData : ClientContext? = null
 
+        internal fun sendMessage(errorTag : String?, message : String){
+            send("${errorTag ?: ""}|$message")
+        }
         /**
          * This should be called by your web framework when a websocket receives a message.
          * Ideally, the web framework should process these messages sequentially.
@@ -77,10 +97,21 @@ class ShadeRoot(
                             clientData!!.setHandler(this@MessageHandler)
                         }
                     } else {
-                        val parts = message.split('|', limit = 2)
-                        val callbackId = parts.first().toLong()
-                        val data = if(parts.size > 1) parts[1] else null
-                        clientData!!.callCallback(callbackId, data)
+                        val (tag, data) = message.split('|', limit = 2)
+                        val error by lazy { JavascriptError(Gson().fromJson(data, JavascriptErrorData::class.java)) }
+                        if(tag == "E"){ //Global caught error
+                            try { onUncaughtJavascriptException(error) } catch(t : Throwable){
+                                logger.error(t) { "While handling uncaught global JavaScript error" }
+                            }
+                        } else { //Attached to a callback
+                            val isError = tag.startsWith('E')
+                            val callbackId = tag.dropWhile { it == 'E' }.toLong()
+                            if(isError){
+                                clientData!!.onCallbackError(callbackId, error)
+                            } else {
+                                clientData!!.callCallback(callbackId, data.ifBlank { null })
+                            }
+                        }
                     }
                 }
             }

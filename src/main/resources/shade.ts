@@ -110,8 +110,19 @@
                     sendMessage(socketReadyQueue.shift()!, null);
                 }
             };
+
             socket.onmessage = function(event) {
-                eval(event.data);
+                const [tag, script] = (event.data as string).split('|', 2);
+                try {
+                    eval(script);
+                } catch(e){
+                    socket.send(`E${tag}|` + JSON.stringify({
+                        eval: event.data.substring(0, 256),
+                        name: e.name,
+                        jsMessage: e.message,
+                        stack : e.stack
+                    }))
+                }
             };
             socket.onclose = function(evt) {
                 console.log(`Socket closed: ${evt.reason}, ${evt.wasClean}`);
@@ -130,7 +141,7 @@
         }
 
         function sendMessage(id : string, msg : string|undefined|null) {
-            const finalMsg = msg ? id + "|" + msg : ""+id;
+            const finalMsg = msg ? id + "|" + msg : id + "|";
             if (socketReady) {
                 socket.send(finalMsg);
             } else {
@@ -147,5 +158,15 @@
         }, 60*1000);
 
         (window as any).shade = sendMessage;
+        window.addEventListener('error', function(event: ErrorEvent){
+            const error = event.error;
+            if(error && error instanceof Error){
+                socket.send(`E|` + JSON.stringify({
+                    name: error.name,
+                    jsMessage: error.message,
+                    stack : error.stack
+                }))
+            }
+        });
     }
 })();

@@ -16,10 +16,10 @@ import java.util.concurrent.atomic.AtomicLong
 /**
  * Stores and manages state for a particular client connection.
  */
-class ClientContext(private val id : UUID) {
+class ClientContext(private val clientId : UUID, val root : ShadeRoot) {
     companion object : KLogging()
     private inline fun <T> logging(cb: ()->T) : T {
-        return withLoggingInfo("shadeClientId" to id.toString()){
+        return withLoggingInfo("shadeClientId" to clientId.toString()){
             cb()
         }
     }
@@ -139,6 +139,22 @@ class ClientContext(private val id : UUID) {
     private var eventProcessing = false
     private val eventQueue : Queue<Pair<suspend (String?) -> Unit, String?>> = ArrayDeque()
 
+    internal fun onCallbackError(id : Long, error : JavascriptError) = logging {
+        val callback = getCallback(id)
+        GlobalScope.launch(context = MDCContext()){
+            val onError = callback.onError
+            try {
+                if(onError != null){
+                    onError(error)
+                } else {
+                    root.onUncaughtJavascriptException(error)
+                }
+            } catch(t : Throwable){
+                logger.error(t) { "While handling callback error" }
+            }
+        }
+    }
+
     internal fun callCallback(id : Long, data : String?) = logging {
         logger.trace { "Calling callback $id with data ${data?.ellipsizeAfter(100)}" }
         val callback = getCallback(id)
@@ -218,14 +234,16 @@ class ClientContext(private val id : UUID) {
 
     private val handlerLock = Object()
     private var handler : ShadeRoot.MessageHandler? = null
-    private var javascriptQueue : MutableList<String>? = Collections.synchronizedList(mutableListOf<String>())
-    private fun sendJavascript(javascript : String) = logging {
+
+    private data class QueuedMessage(val errorTag : String?, val message : String)
+    private var javascriptQueue : MutableList<QueuedMessage>? = Collections.synchronizedList(mutableListOf())
+    private fun sendJavascript(errorTag : String?, javascript : String) = logging {
         logger.trace { "Sending javascript: ${javascript.ellipsizeAfter(200)}" }
         synchronized(handlerLock){
             if(handler != null){
-                handler!!.send(javascript)
+                handler!!.sendMessage(errorTag, javascript)
             } else {
-                javascriptQueue!!.add(javascript)
+                javascriptQueue!!.add(QueuedMessage(errorTag, javascript))
             }
         }
 
@@ -235,7 +253,7 @@ class ClientContext(private val id : UUID) {
             logger.info { "Client connected, handler set" }
             this.handler = handler
             javascriptQueue!!.forEach {
-                handler.send(it)
+                handler.sendMessage(it.errorTag, it.message)
             }
             javascriptQueue = null
         }
@@ -249,6 +267,7 @@ class ClientContext(private val id : UUID) {
     ) : Pair<Long, String> {
         val id = storeCallback(CallbackData(
             callback = cb,
+            onError = null,
             requireEventLock = true
         ))
         val wrappedPrefix = if(prefix.isNotBlank()) "(function(){ $prefix }());" else ""
@@ -257,10 +276,11 @@ class ClientContext(private val id : UUID) {
         return id to "javascript:${wrappedPrefix}window.shade($id$wrappedData)$wrappedSuffix"
     }
     fun executeScript(@Language("JavaScript 1.8") js : String) {
-        sendJavascript(js)
+        sendJavascript(null, js)
     }
 
-    fun runExpression(@Language("JavaScript 1.8", prefix = "var result = ", suffix = ";") js : String) : CompletableDeferred<String> {
+
+    private fun runExpressionWithTemplate(template : (Long)->String) : CompletableDeferred<String> {
         val future = CompletableDeferred<String>()
         var id : Long? = null
         id = storeCallback(CallbackData(
@@ -268,24 +288,23 @@ class ClientContext(private val id : UUID) {
                 removeCallback(id!!)
                 future.complete(it!!)
             },
+            onError = {
+                removeCallback(id!!)
+                future.completeExceptionally(it)
+            },
             requireEventLock = false
         ))
-        sendJavascript("var result = $js;\nwindow.shade($id, JSON.stringify(result))")
+        sendJavascript(id.toString(), template(id))
         return future
+    }
+
+    fun runExpression(
+        @Language("JavaScript 1.8", prefix = "var result = ", suffix = ";") js : String) : CompletableDeferred<String> {
+        return runExpressionWithTemplate {id -> "var result = $js;\nwindow.shade($id, JSON.stringify(result))" }
     }
 
     fun runWithCallback(@Language("JavaScript 1.8", prefix = "function cb(data){}; ", suffix = ";") js : String) : CompletableDeferred<String> {
-        val future = CompletableDeferred<String>()
-        var id : Long? = null
-        id = storeCallback(CallbackData(
-            callback = {
-                removeCallback(id!!)
-                future.complete(it!!)
-            },
-            requireEventLock = false
-        ))
-        sendJavascript("(function(){ function cb(data){ window.shade($id, JSON.stringify(data)) }; $js; })()")
-        return future
+        return runExpressionWithTemplate {id -> "(function(){ function cb(data){ window.shade($id, JSON.stringify(data)) }; $js; })()" }
     }
     fun runPromise(@Language("JavaScript 1.8", prefix = "var result = ", suffix = ";") js : String) : CompletableDeferred<String> {
         return runWithCallback("var result = $js; result.then(cb)")
@@ -294,5 +313,17 @@ class ClientContext(private val id : UUID) {
 
 private data class CallbackData(
     val callback : suspend (String?)->Unit,
+    val onError : (suspend(JavascriptError)->Unit)?,
     val requireEventLock : Boolean
+)
+
+class JavascriptError(
+    val details : JavascriptErrorData
+) : RuntimeException("${details.name}: \"${details.jsMessage}\" while evaluating \"${details.eval ?: "Outside of Shade callback"}\"\n${details.stack}")
+
+class JavascriptErrorData(
+    val eval : String?,
+    val jsMessage : String,
+    val name : String,
+    val stack : String
 )

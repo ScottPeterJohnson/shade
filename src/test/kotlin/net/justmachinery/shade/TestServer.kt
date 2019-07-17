@@ -79,6 +79,15 @@ class RootComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) 
             }
             add(SharedStateRender::class, sharedState)
             add(SharedStateInput::class, sharedState)
+
+            button{
+                onClick {
+                    context.executeScript("setTimeout(function(){ throw Error(\"I am a delayed error\") }, 3000)")
+                    val js = context.runExpression("notAValidSymbol").await()
+                    println("Shouldn't get here: $js")
+                }
+                +"Click me to throw an error"
+            }
         }
     }
 
@@ -188,7 +197,7 @@ class WebSocketHandler {
     fun connected(session: Session) {}
 
     @OnWebSocketClose
-    fun closed(session: Session, statusCode: Int, reason: String) {
+    fun closed(session: Session, statusCode: Int, reason: String?) {
         sessions.remove(session)?.onDisconnect()
     }
 

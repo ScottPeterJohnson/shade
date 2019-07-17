@@ -106,7 +106,18 @@
                 }
             };
             socket.onmessage = function (event) {
-                eval(event.data);
+                const [tag, script] = event.data.split('|', 2);
+                try {
+                    eval(script);
+                }
+                catch (e) {
+                    socket.send(`E${tag}|` + JSON.stringify({
+                        eval: event.data.substring(0, 256),
+                        name: e.name,
+                        jsMessage: e.message,
+                        stack: e.stack
+                    }));
+                }
             };
             socket.onclose = function (evt) {
                 console.log(`Socket closed: ${evt.reason}, ${evt.wasClean}`);
@@ -125,7 +136,7 @@
             };
         }
         function sendMessage(id, msg) {
-            const finalMsg = msg ? id + "|" + msg : "" + id;
+            const finalMsg = msg ? id + "|" + msg : id + "|";
             if (socketReady) {
                 socket.send(finalMsg);
             }
@@ -140,5 +151,15 @@
             }
         }, 60 * 1000);
         window.shade = sendMessage;
+        window.addEventListener('error', function (event) {
+            const error = event.error;
+            if (error && error instanceof Error) {
+                socket.send(`E|` + JSON.stringify({
+                    name: error.name,
+                    jsMessage: error.message,
+                    stack: error.stack
+                }));
+            }
+        });
     }
 })();
