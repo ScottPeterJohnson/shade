@@ -155,7 +155,7 @@ class ClientContext(private val clientId : UUID, val root : ShadeRoot) {
         }
     }
 
-    internal fun callCallback(id : Long, data : String?) = logging {
+    internal fun callCallback(id : Long, data : String?) : Unit = logging {
         logger.trace { "Calling callback $id with data ${data?.ellipsizeAfter(100)}" }
         val callback = getCallback(id)
         if(callback.requireEventLock) {

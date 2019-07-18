@@ -205,7 +205,7 @@ class WebSocketHandler {
     fun message(session: Session, message: String) {
 
         sessions.getOrPut(session){
-            root.handler { session.remote.sendString(it) }
+            root.handler(send = { session.remote.sendString(it) }, disconnect = { session.disconnect() })
         }.onMessage(message)
     }
 }

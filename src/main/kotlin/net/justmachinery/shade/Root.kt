@@ -65,12 +65,13 @@ class ShadeRoot(
         cb(context)
     }
 
-    fun handler(send : (String)->Unit) = MessageHandler(send)
+    fun handler(send : (String)->Unit, disconnect : ()->Unit) = MessageHandler(send, disconnect)
 
     private val clientDataMap = Collections.synchronizedMap(mutableMapOf<UUID, ClientContext>())
 
     inner class MessageHandler internal constructor(
-        private val send : (String)->Unit
+        private val send : (String)->Unit,
+        private val disconnect : ()->Unit
     ) {
         private var clientId : UUID? = null
         private var clientData : ClientContext? = null
@@ -92,7 +93,8 @@ class ShadeRoot(
                         clientData = clientDataMap[clientId]
                         if(clientData == null){
                             logger.info { "Client ID expired or invalid: $clientId" }
-                            send("window.location.reload(true)")
+                            sendMessage(null, "window.location.reload(true)")
+                            disconnect()
                         } else {
                             clientData!!.setHandler(this@MessageHandler)
                         }
