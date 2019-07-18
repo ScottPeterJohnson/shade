@@ -112,7 +112,10 @@
             };
 
             socket.onmessage = function(event) {
-                const [tag, script] = (event.data as string).split('|', 2);
+                const data = (event.data as string);
+                const splitIndex = data.indexOf('|');
+                const tag = data.substring(0, splitIndex);
+                const script = data.substring(splitIndex+1, data.length);
                 try {
                     eval(script);
                 } catch(e){
