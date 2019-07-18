@@ -88,6 +88,16 @@ class RootComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) 
                 }
                 +"Click me to throw an error"
             }
+            button{
+                onClick {
+                    try {
+                        context.runPromise("new Promise(function(request, reject){ setTimeout(function(){ reject(Error(\"I am a delayed promise error\")) }, 3000) })").await()
+                    } catch(e : JavascriptError){
+                        println("Error caught! $e")
+                    }
+                }
+                +"Click me to throw a Promise error"
+            }
         }
     }
 

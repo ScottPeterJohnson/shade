@@ -304,10 +304,10 @@ class ClientContext(private val clientId : UUID, val root : ShadeRoot) {
     }
 
     fun runWithCallback(@Language("JavaScript 1.8", prefix = "function cb(data){}; ", suffix = ";") js : String) : CompletableDeferred<String> {
-        return runExpressionWithTemplate {id -> "(function(){ function cb(data){ window.shade($id, JSON.stringify(data)) }; $js; })()" }
+        return runExpressionWithTemplate {id -> "(function(){ function shadeErr(e){ sendIfError(e, $id, script) }; function cb(data){ window.shade($id, JSON.stringify(data)) }; $js; })()" }
     }
     fun runPromise(@Language("JavaScript 1.8", prefix = "var result = ", suffix = ";") js : String) : CompletableDeferred<String> {
-        return runWithCallback("var result = $js; result.then(cb)")
+        return runWithCallback("var result = $js; result.then(cb).catch(shadeErr);")
     }
 }
 

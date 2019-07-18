@@ -114,12 +114,7 @@
                     eval(script);
                 }
                 catch (e) {
-                    socket.send(`E${tag}|` + JSON.stringify({
-                        eval: event.data.substring(0, 256),
-                        name: e.name,
-                        jsMessage: e.message,
-                        stack: e.stack
-                    }));
+                    sendIfError(e, tag, event.data.substring(0, 256));
                 }
             };
             socket.onclose = function (evt) {
@@ -139,12 +134,23 @@
             };
         }
         function sendMessage(id, msg) {
-            const finalMsg = msg ? id + "|" + msg : id + "|";
+            const finalMsg = (msg !== undefined || msg !== null) ? id + "|" + msg : id + "|";
             if (socketReady) {
                 socket.send(finalMsg);
             }
             else {
                 socketReadyQueue.push(finalMsg);
+            }
+        }
+        function sendIfError(error, tag, evalText) {
+            if (error instanceof Error) {
+                socket.send(`E${tag == undefined ? "" : tag}|` + JSON.stringify({
+                    name: error.name,
+                    jsMessage: error.message,
+                    stack: error.stack,
+                    eval: evalText,
+                    tag: tag
+                }));
             }
         }
         connectSocket();
@@ -155,14 +161,10 @@
         }, 60 * 1000);
         window.shade = sendMessage;
         window.addEventListener('error', function (event) {
-            const error = event.error;
-            if (error && error instanceof Error) {
-                socket.send(`E|` + JSON.stringify({
-                    name: error.name,
-                    jsMessage: error.message,
-                    stack: error.stack
-                }));
-            }
+            sendIfError(event.error);
+        });
+        window.addEventListener('unhandledrejection', function (event) {
+            sendIfError(event.reason);
         });
     }
 })();

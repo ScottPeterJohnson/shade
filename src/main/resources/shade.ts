@@ -95,10 +95,13 @@
         reconcileChildren(target.parentElement!!, target, included, htmlDom.childNodes)
     }
 
+
+
     if(!(window as any).shade){
         let socketReady = false;
         const socketReadyQueue : string[] = [];
         let socket : WebSocket;
+
         function connectSocket(){
             socket = new WebSocket((window.location.protocol === "https:" ? "wss://" : "ws://") + window.location.host + (window as any).shadeEndpoint);
             socket.onopen = function() {
@@ -119,12 +122,7 @@
                 try {
                     eval(script);
                 } catch(e){
-                    socket.send(`E${tag}|` + JSON.stringify({
-                        eval: event.data.substring(0, 256),
-                        name: e.name,
-                        jsMessage: e.message,
-                        stack : e.stack
-                    }))
+                    sendIfError(e, tag, event.data.substring(0, 256));
                 }
             };
             socket.onclose = function(evt) {
@@ -144,11 +142,23 @@
         }
 
         function sendMessage(id : string, msg : string|undefined|null) {
-            const finalMsg = msg ? id + "|" + msg : id + "|";
+            const finalMsg = (msg !== undefined || msg !== null) ? id + "|" + msg : id + "|";
             if (socketReady) {
                 socket.send(finalMsg);
             } else {
                 socketReadyQueue.push(finalMsg);
+            }
+        }
+
+        function sendIfError(error : object, tag?: string, evalText ?: string){
+            if(error instanceof Error){
+                socket.send(`E${tag == undefined ? "" : tag}|` + JSON.stringify({
+                    name: error.name,
+                    jsMessage: error.message,
+                    stack : error.stack,
+                    eval: evalText,
+                    tag: tag
+                }))
             }
         }
 
@@ -161,15 +171,12 @@
         }, 60*1000);
 
         (window as any).shade = sendMessage;
+
         window.addEventListener('error', function(event: ErrorEvent){
-            const error = event.error;
-            if(error && error instanceof Error){
-                socket.send(`E|` + JSON.stringify({
-                    name: error.name,
-                    jsMessage: error.message,
-                    stack : error.stack
-                }))
-            }
+            sendIfError(event.error);
+        });
+        window.addEventListener('unhandledrejection', function(event : PromiseRejectionEvent){
+            sendIfError(event.reason);
         });
     }
 })();
