@@ -1,8 +1,6 @@
 package net.justmachinery.shade
 
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import kotlinx.coroutines.slf4j.MDCContext
 import kotlinx.html.Tag
 import mu.KLogging
@@ -139,21 +137,35 @@ class ClientContext(private val clientId : UUID, val root : ShadeRoot) {
     private var eventProcessing = false
     private val eventQueue : Queue<Pair<suspend (String?) -> Unit, String?>> = ArrayDeque()
 
-    internal fun onCallbackError(id : Long, error : JavascriptError) = logging {
+    private val supervisor = SupervisorJob()
+    internal var coroutineScope = CoroutineScope(supervisor)
+
+    internal fun cleanup(){
+        GlobalScope.launch {
+            supervisor.cancel()
+        }
+    }
+
+    internal fun onCallbackError(id : Long, exception : JavascriptException) = logging {
         val callback = getCallback(id)
-        GlobalScope.launch(context = MDCContext()){
+        coroutineScope.launch(context = MDCContext()){
             val onError = callback.onError
             try {
                 if(onError != null){
-                    onError(error)
+                    onError(exception)
                 } else {
-                    root.onUncaughtJavascriptException(error)
+                    root.onUncaughtJavascriptException(exception)
                 }
             } catch(t : Throwable){
-                logger.error(t) { "While handling callback error" }
+                if(t is CancellationException){
+                    logger.info(t) { "Callback exception processing cancelled" }
+                } else {
+                    logger.error(t) { "While handling callback exception" }
+                }
             }
         }
     }
+
 
     internal fun callCallback(id : Long, data : String?) : Unit = logging {
         logger.trace { "Calling callback $id with data ${data?.ellipsizeAfter(100)}" }
@@ -168,7 +180,7 @@ class ClientContext(private val clientId : UUID, val root : ShadeRoot) {
                 } else {
                     logger.trace { "Starting new processing coroutine for callback $id" }
                     eventProcessing = true
-                    GlobalScope.launch(context = MDCContext()) {
+                    coroutineScope.launch(context = MDCContext()) {
                         batchingReRenders {
                             runEventLockedCallback(callback.callback, data)
                         }
@@ -176,12 +188,16 @@ class ClientContext(private val clientId : UUID, val root : ShadeRoot) {
                 }
             }
         } else {
-            GlobalScope.launch(context = MDCContext()) {
+            coroutineScope.launch(context = MDCContext()) {
                 batchingReRenders {
                     try {
                         callback.callback(data)
                     } catch(t : Throwable){
-                        logger.error(t) { "Error processing callback" }
+                        if(t is CancellationException){
+                            logger.info(t) { "Callback processing cancelled" }
+                        } else {
+                            logger.error(t) { "Error processing callback" }
+                        }
                     }
                 }
             }
@@ -195,7 +211,11 @@ class ClientContext(private val clientId : UUID, val root : ShadeRoot) {
             try {
                 currentCallback(currentData)
             } catch(t : Throwable){
-                logger.error(t){ "Error processing event callback" }
+                if(t is CancellationException){
+                    logger.info(t) { "Error processing callback cancelled" }
+                } else {
+                    logger.error(t) { "Error processing event callback" }
+                }
             }
 
             val cb = synchronized(eventQueue){
@@ -298,30 +318,42 @@ class ClientContext(private val clientId : UUID, val root : ShadeRoot) {
         return future
     }
 
+    /**
+     * Run a JS expression and return the JSONified result.
+     */
     fun runExpression(
         @Language("JavaScript 1.8", prefix = "var result = ", suffix = ";") js : String) : CompletableDeferred<String> {
         return runExpressionWithTemplate {id -> "var result = $js;\nwindow.shade($id, JSON.stringify(result))" }
     }
 
+    /**
+     * Run a JS snippet with the "shadeCb" and "shadeErr" functions in immediate scope.
+     * Call shadeCb(data) to return data, or shadeErr(error) to throw an exception.
+     */
     fun runWithCallback(@Language("JavaScript 1.8", prefix = "function cb(data){}; ", suffix = ";") js : String) : CompletableDeferred<String> {
-        return runExpressionWithTemplate {id -> "(function(){ function shadeErr(e){ sendIfError(e, $id, script) }; function cb(data){ window.shade($id, JSON.stringify(data)) }; $js; })()" }
+        return runExpressionWithTemplate {id -> "(function(){ function shadeErr(e){ sendIfError(e, $id, script.substring(0,256)) }; function shadeCb(data){ window.shade($id, JSON.stringify(data)) }; $js; })()" }
     }
+
+    /**
+     * Run a JS expression that returns a promise, returning the JSON representation of the promise's resolution or throwing
+     * a JavascriptException if processing failed.
+     */
     fun runPromise(@Language("JavaScript 1.8", prefix = "var result = ", suffix = ";") js : String) : CompletableDeferred<String> {
-        return runWithCallback("var result = $js; result.then(cb).catch(shadeErr);")
+        return runWithCallback("var result = $js; result.then(shadeCb).catch(shadeErr);")
     }
 }
 
 private data class CallbackData(
     val callback : suspend (String?)->Unit,
-    val onError : (suspend(JavascriptError)->Unit)?,
+    val onError : (suspend(JavascriptException)->Unit)?,
     val requireEventLock : Boolean
 )
 
-class JavascriptError(
-    val details : JavascriptErrorData
+class JavascriptException(
+    val details : JavascriptExceptionDetails
 ) : RuntimeException("${details.name}: \"${details.jsMessage}\" while evaluating \"${details.eval ?: "Outside of Shade callback"}\"\n${details.stack}")
 
-class JavascriptErrorData(
+class JavascriptExceptionDetails(
     val eval : String?,
     val jsMessage : String,
     val name : String,

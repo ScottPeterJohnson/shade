@@ -19,7 +19,10 @@ class ShadeRoot(
      * This is called after a component is constructed, and could be used to e.g. inject dependencies.
      */
     val afterConstructComponent : (Component<*,*>)->Unit = {},
-    val onUncaughtJavascriptException : (JavascriptError)->Unit = {
+    /**
+     * Called whenever an exception is thrown in a client's JS page that cannot be mapped to a deferred
+     */
+    val onUncaughtJavascriptException : (JavascriptException)->Unit = {
         logger.error(it){ "Uncaught JS exception" }
     }
 ) {
@@ -100,7 +103,7 @@ class ShadeRoot(
                         }
                     } else {
                         val (tag, data) = message.split('|', limit = 2)
-                        val error by lazy { JavascriptError(Gson().fromJson(data, JavascriptErrorData::class.java)) }
+                        val error by lazy { JavascriptException(Gson().fromJson(data, JavascriptExceptionDetails::class.java)) }
                         if(tag == "E"){ //Global caught error
                             try { onUncaughtJavascriptException(error) } catch(t : Throwable){
                                 logger.error(t) { "While handling uncaught global JavaScript error" }
@@ -125,7 +128,8 @@ class ShadeRoot(
                     logger.info { "Client disconnected" }
                 }
                 clientId?.let {
-                    clientDataMap.remove(it)
+                    val data = clientDataMap.remove(it)
+                    data?.cleanup()
                 }
             }
         }

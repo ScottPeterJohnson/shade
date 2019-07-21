@@ -143,15 +143,20 @@
             }
         }
         function sendIfError(error, tag, evalText) {
-            if (error instanceof Error) {
-                socket.send(`E${tag == undefined ? "" : tag}|` + JSON.stringify({
-                    name: error.name,
-                    jsMessage: error.message,
-                    stack: error.stack,
-                    eval: evalText,
-                    tag: tag
-                }));
-            }
+            const data = error instanceof Error ? {
+                name: error.name,
+                jsMessage: error.message,
+                stack: error.stack,
+                eval: evalText,
+                tag: tag
+            } : {
+                name: "Unknown",
+                jsMessage: "Unknown error: " + error,
+                stack: "",
+                eval: evalText,
+                tag: tag
+            };
+            socket.send(`E${tag == undefined ? "" : tag}|` + JSON.stringify(data));
         }
         connectSocket();
         setInterval(() => {

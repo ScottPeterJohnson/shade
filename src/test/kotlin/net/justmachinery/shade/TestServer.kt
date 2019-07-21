@@ -1,6 +1,6 @@
 package net.justmachinery.shade
 
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.css.Color
 import kotlinx.css.backgroundColor
@@ -92,17 +92,23 @@ class RootComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) 
                 onClick {
                     try {
                         context.runPromise("new Promise(function(request, reject){ setTimeout(function(){ reject(Error(\"I am a delayed promise error\")) }, 3000) })").await()
-                    } catch(e : JavascriptError){
+                    } catch(e : JavascriptException){
                         println("Error caught! $e")
                     }
                 }
                 +"Click me to throw a Promise error"
             }
+            button{
+                onClick {
+                    delay(100 * 1000 * 1000)
+                }
+                +"Launch a long-running coroutine"
+            }
         }
     }
 
     override fun mounted() {
-        GlobalScope.launch {
+        launch {
             val result = context.runPromise("new Promise(function(resolve, reject){ setTimeout(function(){ resolve('foo') }, 3000)})").await()
             println("Got: $result")
         }

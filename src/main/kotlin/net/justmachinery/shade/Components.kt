@@ -1,6 +1,7 @@
 package net.justmachinery.shade
 
 import com.google.gson.Gson
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.html.*
 import net.justmachinery.shade.render.ComponentRenderState
 import net.justmachinery.shade.render.addComponent
@@ -22,7 +23,7 @@ open class Props<T : Any>(
  * It is automatically rerendered when any observable state used in its render function changes.
  * Note that instances of this class MUST have a constructor that accepts the single fullProps parameter.
  */
-abstract class Component<PropType : Any, RenderIn : Tag>(fullProps : Props<PropType>) {
+abstract class Component<PropType : Any, RenderIn : Tag>(fullProps : Props<PropType>) : CoroutineScope by fullProps.context.coroutineScope {
     var props = fullProps.props
     val context = fullProps.context
     val key = fullProps.key
