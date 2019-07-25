@@ -263,7 +263,7 @@ class ClientContext(private val clientId : UUID, val root : ShadeRoot) {
             if(handler != null){
                 handler!!.sendMessage(errorTag, javascript)
             } else {
-                javascriptQueue!!.add(QueuedMessage(errorTag, javascript))
+                javascriptQueue?.add(QueuedMessage(errorTag, javascript))
             }
         }
 
@@ -272,7 +272,7 @@ class ClientContext(private val clientId : UUID, val root : ShadeRoot) {
         synchronized(handlerLock){
             logger.info { "Client connected, handler set" }
             this.handler = handler
-            javascriptQueue!!.forEach {
+            javascriptQueue?.forEach {
                 handler.sendMessage(it.errorTag, it.message)
             }
             javascriptQueue = null

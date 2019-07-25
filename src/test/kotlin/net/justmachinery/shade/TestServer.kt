@@ -104,6 +104,8 @@ class RootComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) 
                 }
                 +"Launch a long-running coroutine"
             }
+
+            add(KeyRerenderTest::class, Unit)
         }
     }
 
@@ -173,6 +175,64 @@ class SharedStateInput(props : Props<SharedRootState>) : Component<SharedRootSta
                     props.text = it
                 }
             }
+        }
+    }
+}
+
+class KeyRerenderTest(fullProps : Props<Unit>) : Component<Unit, HtmlBlockTag>(fullProps) {
+    var numbersList by observable((0 until 10).toList())
+    override fun HtmlBlockTag.render() {
+        style {
+            //language=CSS
+            unsafe { raw("""
+                @keyframes flash {
+                    from {
+                        background-color: black;
+                    }
+                    to {
+                        background-color: white;
+                    }
+                }
+                .flashNumber {
+                    animation: flash 5s;
+                }
+            """.trimIndent()) }
+        }
+        div {
+            numbersList.forEach {
+                div(classes = "flashNumber") {
+                    key = it.toString()
+                    +"I am $it"
+                }
+                if(it.rem(2) == 0){
+                    div(classes = "flashNumber") {
+                        +"I am not a number"
+                    }
+                }
+            }
+            numbersList.forEach {
+                add(KeyRerenderTestShow::class, it, key = it.toString())
+                if(it.rem(2) == 0){
+                    div(classes = "flashNumber") {
+                        +"I am also not a number"
+                    }
+                }
+            }
+        }
+        button {
+            onClick {
+                numbersList = numbersList.sortedBy { Math.random() }
+            }
+            +"Shuffle list"
+        }
+    }
+}
+
+class KeyRerenderTestShow(fullProps : Props<Int>) : Component<Int, HtmlBlockTag>(fullProps){
+    override fun HtmlBlockTag.render() {
+        div(classes = "flashNumber") {
+            testBackground()
+            +"I am component $props"
         }
     }
 }

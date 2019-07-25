@@ -2,6 +2,7 @@ package net.justmachinery.shade
 
 import kotlinx.css.CSSBuilder
 import kotlinx.html.CommonAttributeGroupFacade
+import kotlinx.html.HtmlBlockTag
 import kotlinx.html.HtmlTagMarker
 import kotlinx.html.style
 import org.slf4j.MDC
@@ -32,3 +33,13 @@ internal inline fun <T> withLoggingInfo(vararg pair: Pair<String, String>, body:
 }
 
 internal fun String.ellipsizeAfter(maxLength : Int) = if(this.length > maxLength) this.take(maxLength) + "..." else this
+
+var HtmlBlockTag.key : String?
+    get() = attributes["data-key"]
+    set(it) {
+        if(it != null){
+            attributes["data-key"] = it
+        } else {
+            attributes.remove("data-key")
+        }
+    }

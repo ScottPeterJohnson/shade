@@ -1,82 +1,187 @@
 (function(){
-    function reconcile(dom : Node, other : Node) : Node {
-        if(dom instanceof HTMLElement && other instanceof HTMLElement){
-            if(dom.tagName != other.tagName){
-                return other;
+    function reconcile(original : Node, newer : Node) : Node {
+        if(original instanceof HTMLElement && newer instanceof HTMLElement){
+            if(original.tagName != newer.tagName){
+                return newer;
             } else {
-                for(let i=0;i<dom.attributes.length;i++){
-                    const attribute = dom.attributes[i].name;
-                    if(!other.hasAttribute(attribute)){
-                        dom.removeAttribute(attribute);
+                for(let i=0;i<original.attributes.length;i++){
+                    const attribute = original.attributes[i].name;
+                    if(!newer.hasAttribute(attribute)){
+                        original.removeAttribute(attribute);
                     }
                 }
-                for(let i=0;i<other.attributes.length;i++){
-                    const attribute = other.attributes[i].name;
-                    dom.setAttribute(attribute, other.getAttribute(attribute)!);
+                for(let i=0;i<newer.attributes.length;i++){
+                    const attribute = newer.attributes[i].name;
+                    original.setAttribute(attribute, newer.getAttribute(attribute)!);
                 }
-                reconcileChildren(dom, null, dom.childNodes, other.childNodes);
-                return dom;
+                patchChildren(original, null, original.childNodes, newer.childNodes);
+                return original;
             }
         } else {
-            return other;
+            return newer;
         }
     }
     interface ChildNodeListLike {
         length : number;
-        [index: number] : ChildNode
+        [index: number] : Node
     }
-    function reconcileChildren(
-        dom : HTMLElement,
-        initialAppendAfter : Node|null,
-        domChildren : ChildNodeListLike,
-        otherChildren : ChildNodeListLike
-    ){
-        const origDom = Array.from(domChildren);
-        const origOther = Array.from(otherChildren);
-        let domIndex = 0;
-        let otherIndex = 0;
-        let domAppendAfter = initialAppendAfter;
-        while(domIndex < origDom.length || otherIndex < origOther.length){
-            const domChild = origDom[domIndex];
-            const otherChild = origOther[otherIndex];
-            if(!domChild && otherChild){
-                if(domAppendAfter === null){
-                    dom.appendChild(otherChild);
-                } else {
-                    dom.insertBefore(otherChild, domAppendAfter.nextSibling);
+
+
+    type NodeOrComponent = (Node|Node[]);
+    function collapseComponentChildren(list : ChildNodeListLike, excludeEnds : Boolean) : NodeOrComponent[] {
+        const result : NodeOrComponent[] = [];
+        for(let i=0;i<list.length;i++){
+            const child = list[i];
+            if((!excludeEnds || (i>0 && i<list.length-1)) && child instanceof HTMLElement && child.tagName == "SCRIPT" && child.getAttribute("type") === "shade" && child.getAttribute("data-shade-keep") == null){
+                const component : Node[] = [];
+                const endId = child.id + "-end";
+                while(i < list.length){
+                    const subChild = list[i];
+                    component.push(subChild);
+                    if(subChild instanceof HTMLElement && subChild.tagName == "SCRIPT" && subChild.id == endId){
+                        break
+                    }
+                    i++;
                 }
-                domAppendAfter = otherChild;
-            } else if (domChild && !otherChild) {
-                dom.removeChild(domChild);
+                result.push(component);
             } else {
-                if(domChild instanceof HTMLElement &&
-                    otherChild instanceof HTMLElement &&
-                    domChild.tagName == "SCRIPT" &&
-                    otherChild.tagName == "SCRIPT" &&
-                    domChild.id == otherChild.id &&
-                    otherChild.getAttribute("data-shade-keep") != null
-                ){
-                    const endId = domChild.id + "-end";
-                    while(domIndex < origDom.length){
-                        let skipDom = origDom[domIndex];
-                        if(skipDom instanceof HTMLElement && skipDom.tagName == "SCRIPT" && skipDom.id == endId){
-                            domAppendAfter = skipDom;
-                            break
-                        }
-                        domIndex += 1;
-                    }
-                } else {
-                    const reconciled = reconcile(domChild, otherChild);
-                    if(reconciled != domChild){
-                        dom.replaceChild(reconciled, domChild);
-                    }
-                    domAppendAfter = reconciled;
+                result.push(child)
+            }
+        }
+        return result;
+    }
+    function collectKeysMap(childList : NodeOrComponent[], excludeEnds : Boolean) : {[key:string] : NodeOrComponent} {
+        const keys : {[key:string] : NodeOrComponent} = {};
+        for(let i=0;i<childList.length;i++){
+            if(excludeEnds && (i===0||i===childList.length-1)){
+                continue
+            }
+            const child = childList[i];
+            const target = Array.isArray(child) ? child[0] : child;
+            if(target instanceof HTMLElement){
+                const key = target.getAttribute("data-key");
+                if(key != null){
+                    keys[key] = child;
                 }
             }
-            domIndex += 1;
-            otherIndex += 1;
+        }
+        return keys;
+    }
+
+    function patchChildren(
+        dom : HTMLElement,
+        appendStart : HTMLElement|null,
+        domChildren : ChildNodeListLike,
+        replacementChildren : ChildNodeListLike
+    ){
+        const final = reconcileChildren(domChildren, replacementChildren, false);
+        const end = domChildren.length > 0 ? domChildren[domChildren.length-1].nextSibling : null;
+
+        let current : Node|null = appendStart;
+        let insertAtBeginning = current === null;
+        for(const child of final){
+            let next : Node|null;
+            if(insertAtBeginning){
+                next = dom.firstChild;
+            } else {
+                next = current ? current.nextSibling : null;
+            }
+            insertAtBeginning = false;
+            if(next !== child){
+                dom.insertBefore(child, next);
+            }
+            current = child;
+        }
+        current = current ? current.nextSibling : null;
+        while(current != null && current != end){
+            const child = current;
+            current = current.nextSibling;
+            dom.removeChild(child);
         }
     }
+
+    function toArray<T>(t : T|T[]) : T[] {
+        return Array.isArray(t) ? t : [t];
+    }
+    function fromArray<T>(t : T|T[]) : T {
+        return Array.isArray(t) ? t[0] : t;
+    }
+
+    function reconcileChildren(
+        domChildren : ChildNodeListLike,
+        replacementChildren : ChildNodeListLike,
+        excludeEndsFromComponentCollapse : Boolean
+    ) : Node[] {
+        const originals = collapseComponentChildren(domChildren, excludeEndsFromComponentCollapse);
+        const replacements = collapseComponentChildren(replacementChildren, excludeEndsFromComponentCollapse);
+        const originalKeys = collectKeysMap(originals, excludeEndsFromComponentCollapse);
+
+        let originalIndex = 0;
+        let replacementIndex = 0;
+
+        const finalChildren : Node[] = [];
+
+        while(originalIndex < originals.length || replacementIndex < replacements.length){
+            const atCursor = originals[originalIndex];
+            const newer = replacements[replacementIndex];
+            if(!atCursor && newer){
+                finalChildren.push(...toArray(newer));
+            } else if (atCursor && !newer) {
+                //Implicit remove
+            } else {
+                const newerFirst = fromArray(newer);
+
+                let original : NodeOrComponent = atCursor;
+                let originalFirst = fromArray(original);
+
+                const newerKey = newerFirst instanceof HTMLElement ? newerFirst.getAttribute("data-key") : null;
+
+                if(newerKey != null){
+                    if(originalKeys[newerKey]){
+                        original = originalKeys[newerKey];
+                        originalFirst = fromArray(original);
+                    }
+                }
+                const originalKey = originalFirst instanceof HTMLElement ? originalFirst.getAttribute("data-key") : null;
+
+                let add : Node[];
+
+                if(originalFirst instanceof HTMLElement &&
+                    newerFirst instanceof HTMLElement &&
+                    originalFirst.tagName == "SCRIPT" &&
+                    newerFirst.tagName == "SCRIPT" &&
+                    originalFirst.id == newerFirst.id &&
+                    newerFirst.getAttribute("data-shade-keep") != null
+                ){
+                    //Short-circuit with implicit equal
+                    add = toArray(original);
+                } else {
+                    if(originalKey != newerKey){
+                        add = toArray(newer);
+                    } else {
+                        const originalIsComponent = Array.isArray(original);
+                        const newerIsComponent = Array.isArray(newer);
+                        if(originalIsComponent && newerIsComponent){
+                            if(originalFirst instanceof HTMLElement && newerFirst instanceof HTMLElement && originalFirst.id == newerFirst.id){
+                                add = reconcileChildren(<Node[]>original, <Node[]>newer, true)
+                            } else {
+                                add = toArray(newer);
+                            }
+                        } else if(originalIsComponent != newerIsComponent){
+                            add = toArray(newer);
+                        } else {
+                            add = [reconcile(<Node>original, <Node>newer)]
+                        }
+                    }
+                }
+                finalChildren.push(...add);
+            }
+            originalIndex += 1;
+            replacementIndex += 1;
+        }
+        return finalChildren;
+    }
+
     function r(targetId : string, base64 : string){
         const target = document.getElementById(targetId);
         if(!target){ return }
@@ -92,7 +197,7 @@
         }
 
 
-        reconcileChildren(target.parentElement!!, target, included, htmlDom.childNodes)
+        patchChildren(target.parentElement!!, target, included, htmlDom.childNodes)
     }
 
 

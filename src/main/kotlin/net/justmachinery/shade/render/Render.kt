@@ -25,10 +25,11 @@ internal fun <RenderIn : Tag> Component<*, RenderIn>.renderInternal(tag : Render
     context.hasReRendered?.add(this)
     renderState.lastRenderCallbackIds.clear()
     context.withComponentRendering(this){
-        if(addMarkers) SCRIPT(mapOf(
+        if(addMarkers) SCRIPT(listOfNotNull(
             "type" to "shade",
-            "id" to renderState.componentId.toString()
-        ), tag.consumer).visit {}
+            "id" to renderState.componentId.toString(),
+            this.key?.let { "data-key" to it }
+        ).toMap(), tag.consumer).visit {}
         tag.run {
             updateRenderTree(renderState){
                 try {
@@ -82,11 +83,12 @@ fun <T : Any, RenderIn : Tag> addComponent(
             }
         }
         GetComponentResult.EXISTING_KEEP -> {
-            SCRIPT(mapOf(
+            SCRIPT(listOfNotNull(
                 "type" to "shade",
                 "id" to comp.renderState.componentId.toString(),
-                "data-shade-keep" to "true"
-            ), block.consumer).visit {}
+                "data-shade-keep" to "true",
+                comp.key?.let { "data-key" to it }
+            ).toMap(), block.consumer).visit {}
         }
     }
 
@@ -109,8 +111,12 @@ private fun <T : Any, RenderIn : Tag> getOrConstructComponent(
     props : T,
     key : String? = null
 ) : Pair<GetComponentResult, Component<T, RenderIn>> {
-    parent.renderState.location?.let {
-        val oldComponent = it.oldRenderTreeLocation?.children?.getOrNull(it.renderTreeChildIndex)
+    parent.renderState.location?.let { frame ->
+        val oldComponent = if(key != null){
+            frame.oldRenderTreeLocation?.children?.firstOrNull { it is RenderTreeChild.ComponentChild && it.component.key == key }
+        } else {
+            frame.oldRenderTreeLocation?.children?.getOrNull(frame.renderTreeChildIndex)
+        }
         if(oldComponent is RenderTreeChild.ComponentChild && oldComponent.component.kClass == component){
             @Suppress("UNCHECKED_CAST")
             (oldComponent.component as Component<T, RenderIn>)
