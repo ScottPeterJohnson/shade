@@ -75,27 +75,29 @@
         replacementChildren : ChildNodeListLike
     ){
         const final = reconcileChildren(domChildren, replacementChildren, false);
-        const end = domChildren.length > 0 ? domChildren[domChildren.length-1].nextSibling : null;
+        const endOfPatchRange = domChildren.length > 0 ? domChildren[domChildren.length-1].nextSibling : null;
 
-        let current : Node|null = appendStart;
-        let insertAtBeginning = current === null;
-        for(const child of final){
-            let next : Node|null;
-            if(insertAtBeginning){
-                next = dom.firstChild;
+        let current : Node|"start"|"end" = appendStart ? appendStart : "start";
+        function afterCurrent() : Node|"end" {
+            if(current == "start"){
+                return dom.firstChild ? dom.firstChild : "end";
+            } else if(current == "end"){
+                return "end";
             } else {
-                next = current ? current.nextSibling : null;
+                return current.nextSibling ? current.nextSibling : "end";
             }
-            insertAtBeginning = false;
+        }
+        for(const child of final){
+            let next = afterCurrent();
             if(next !== child){
-                dom.insertBefore(child, next);
+                dom.insertBefore(child, next === "end" ? null : next);
             }
             current = child;
         }
-        current = current ? current.nextSibling : null;
-        while(current != null && current != end){
+        current = afterCurrent();
+        while(current != "end" && current != endOfPatchRange){
             const child = current;
-            current = current.nextSibling;
+            current = afterCurrent();
             dom.removeChild(child);
         }
     }
@@ -247,7 +249,7 @@
         }
 
         function sendMessage(id : string, msg : string|undefined|null) {
-            const finalMsg = (msg !== undefined || msg !== null) ? id + "|" + msg : id + "|";
+            const finalMsg = (msg !== undefined && msg !== null) ? id + "|" + msg : id + "|";
             if (socketReady) {
                 socket.send(finalMsg);
             } else {
