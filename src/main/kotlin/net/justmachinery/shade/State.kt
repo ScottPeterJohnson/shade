@@ -18,6 +18,8 @@ class ClientObservableState<T>(private val context : ClientContext, private var 
             if(context.isRenderingThread()){
                 throw IllegalStateException("State cannot be set from inside render")
             }
+            initial = v
+
             val dirty = mutableListOf<Component<*,*>>()
             val removed = mutableListOf<ComponentReference>()
             dependentComponents.forEach {
@@ -30,7 +32,6 @@ class ClientObservableState<T>(private val context : ClientContext, private var 
             }
             dependentComponents.removeAll(removed)
             context.setComponentsDirty(dirty)
-            initial = v
         }
     operator fun getValue(thisRef: Any?, property: KProperty<*>): T {
         return value
