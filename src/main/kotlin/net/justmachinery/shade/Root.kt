@@ -16,6 +16,10 @@ class ShadeRoot(
      */
     val endpoint : String,
     /**
+     * Host to use for websocket URL; use same host as page delivered over if null
+     */
+    val host : String? = null,
+    /**
      * This is called after a component is constructed, and could be used to e.g. inject dependencies.
      */
     val afterConstructComponent : (Component<*,*>)->Unit = {},
@@ -61,7 +65,14 @@ class ShadeRoot(
                 async = true
                 unsafe {
                     //language=JavaScript 1.8
-                    raw("window.shadeEndpoint = \"$endpoint\";\nwindow.shadeId = \"$id\";$shadeScript")
+                    raw(
+                        """
+                            window.shadeEndpoint = "$endpoint";
+                            window.shadeHost = ${if(host != null) "\"$host\"" else "null"};
+                            window.shadeId = "$id";
+                            $shadeScript
+                        """
+                    )
                 }
             }
         }

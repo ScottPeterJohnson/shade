@@ -15,6 +15,9 @@ import spark.Service.ignite
 import java.io.ByteArrayOutputStream
 import java.util.*
 
+fun main(){
+    ServerTest().run()
+}
 
 fun DIV.testBackground(){
     fun gen() = Random().nextInt(255).toString(16).padStart(2, '0')
@@ -242,8 +245,6 @@ class ServerTest {
     fun run(){
         ignite().apply {
             port(9905)
-            webSocketIdleTimeoutMillis(120 * 1000)
-            webSocket("/shade", WebSocketHandler::class.java)
             get("/test"){ request, response ->
                 ByteArrayOutputStream().let { baos ->
                     baos.writer().buffered().use {
@@ -259,11 +260,20 @@ class ServerTest {
                 }
             }
         }
+        ignite().apply {
+            port(9906)
+            webSocketIdleTimeoutMillis(120 * 1000)
+            webSocket("/shade", WebSocketHandler::class.java)
+            get("/test"){ request, response ->
+                "<div>Hello world!</div>"
+            }
+        }
     }
 }
 
 val root = ShadeRoot(
-    endpoint = "/shade"
+    endpoint = "/shade",
+    host = "localhost:9906"
 )
 
 @WebSocket
@@ -284,9 +294,4 @@ class WebSocketHandler {
             root.handler(send = { session.remote.sendString(it) }, disconnect = { session.disconnect() })
         }.onMessage(message)
     }
-}
-
-
-fun main(){
-    ServerTest().run()
 }

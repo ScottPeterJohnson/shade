@@ -210,7 +210,7 @@
         let socket : WebSocket;
 
         function connectSocket(){
-            socket = new WebSocket((window.location.protocol === "https:" ? "wss://" : "ws://") + window.location.host + (window as any).shadeEndpoint);
+            socket = new WebSocket((window.location.protocol === "https:" ? "wss://" : "ws://") + ((window as any).shadeHost || window.location.host) + (window as any).shadeEndpoint);
             socket.onopen = function() {
                 const id = (window as any).shadeId;
                 console.log("Connected with ID " + id);

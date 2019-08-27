@@ -188,7 +188,7 @@
         const socketReadyQueue = [];
         let socket;
         function connectSocket() {
-            socket = new WebSocket((window.location.protocol === "https:" ? "wss://" : "ws://") + window.location.host + window.shadeEndpoint);
+            socket = new WebSocket((window.location.protocol === "https:" ? "wss://" : "ws://") + (window.shadeHost || window.location.host) + window.shadeEndpoint);
             socket.onopen = function () {
                 const id = window.shadeId;
                 console.log("Connected with ID " + id);
