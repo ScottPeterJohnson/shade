@@ -291,7 +291,7 @@ class ClientContext(private val clientId : UUID, val root : ShadeRoot) {
             requireEventLock = true
         ))
         val wrappedPrefix = if(prefix.isNotBlank()) "$prefix;" else ""
-        val wrappedSuffix = if(suffix.isNotBlank()) "$suffix;" else ""
+        val wrappedSuffix = if(suffix.isNotBlank()) ";$suffix" else ""
         val wrappedData = if(data.isNotBlank()) ",JSON.stringify($data)" else ""
         return id to "javascript:(function(){ ${wrappedPrefix}window.shade($id$wrappedData)$wrappedSuffix })()"
     }
