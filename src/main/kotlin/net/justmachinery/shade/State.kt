@@ -15,9 +15,7 @@ class ClientObservableState<T>(private val context : ClientContext, private var 
             return initial
         }
         set(v) {
-            if(context.isRenderingThread()){
-                throw IllegalStateException("State cannot be set from inside render")
-            }
+            check(!context.isRenderingThread()) { "State cannot be set from inside render" }
             initial = v
 
             val dirty = mutableListOf<Component<*,*>>()

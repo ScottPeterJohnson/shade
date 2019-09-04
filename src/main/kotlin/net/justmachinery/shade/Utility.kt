@@ -50,3 +50,5 @@ var HtmlBlockTag.key : String?
 fun HtmlBlockTag.applyJs(@Language("JavaScript 1.8", prefix = "const it = document.createElement('div'); ") js : String){
     attributes["data-shade-element-js"] = js
 }
+
+data class Json(val raw : String)

@@ -52,7 +52,7 @@ class RootComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) 
 
             input {
                 type = InputType.text
-                onChange {
+                onValueChange {
                     newTaskName = it
                 }
             }
@@ -176,7 +176,7 @@ class SharedStateInput(props : Props<SharedRootState>) : Component<SharedRootSta
     override fun HtmlBlockTag.render() {
         div {
             input {
-                onInput {
+                onValueInput {
                     props.text = it
                 }
             }

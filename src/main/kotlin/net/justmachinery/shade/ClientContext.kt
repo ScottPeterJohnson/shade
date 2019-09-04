@@ -135,7 +135,7 @@ class ClientContext(private val clientId : UUID, val root : ShadeRoot) {
      * This is used to make processing of user events sequential
      */
     private var eventProcessing = false
-    private val eventQueue : Queue<Pair<suspend (String?) -> Unit, String?>> = ArrayDeque()
+    private val eventQueue : Queue<Pair<suspend (Json?) -> Unit, Json?>> = ArrayDeque()
 
     private val supervisor = SupervisorJob()
     internal var coroutineScope = CoroutineScope(supervisor)
@@ -167,8 +167,8 @@ class ClientContext(private val clientId : UUID, val root : ShadeRoot) {
     }
 
 
-    internal fun callCallback(id : Long, data : String?) : Unit = logging {
-        logger.trace { "Calling callback $id with data ${data?.ellipsizeAfter(100)}" }
+    internal fun callCallback(id : Long, data : Json?) : Unit = logging {
+        logger.trace { "Calling callback $id with data ${data?.raw?.ellipsizeAfter(100)}" }
         val callback = getCallback(id)
         if(callback.requireEventLock) {
             //We need to make sure only one event callback is running at a time, and put any that should run later into
@@ -186,6 +186,7 @@ class ClientContext(private val clientId : UUID, val root : ShadeRoot) {
                         }
                     }
                 }
+                Unit
             }
         } else {
             coroutineScope.launch(context = MDCContext()) {
@@ -204,7 +205,7 @@ class ClientContext(private val clientId : UUID, val root : ShadeRoot) {
         }
     }
 
-    private suspend fun runEventLockedCallback(callback: suspend (String?) -> Unit, data: String?){
+    private suspend fun runEventLockedCallback(callback: suspend (Json?) -> Unit, data: Json?){
         var currentCallback = callback
         var currentData = data
         while(true){
@@ -282,8 +283,8 @@ class ClientContext(private val clientId : UUID, val root : ShadeRoot) {
     fun eventCallbackString(
         @Language("JavaScript 1.8") prefix : String = "",
         @Language("JavaScript 1.8") suffix : String = "",
-        @Language("JavaScript 1.8") data : String = "",
-        cb : suspend (String?)->Unit
+        @Language("JavaScript 1.8") data : String? = null,
+        cb : suspend (Json?)->Unit
     ) : Pair<Long, String> {
         val id = storeCallback(CallbackData(
             callback = cb,
@@ -292,7 +293,7 @@ class ClientContext(private val clientId : UUID, val root : ShadeRoot) {
         ))
         val wrappedPrefix = if(prefix.isNotBlank()) "$prefix;" else ""
         val wrappedSuffix = if(suffix.isNotBlank()) ";$suffix" else ""
-        val wrappedData = if(data.isNotBlank()) ",JSON.stringify($data)" else ""
+        val wrappedData = if(data != null) ",JSON.stringify($data)" else ""
         return id to "javascript:(function(){ ${wrappedPrefix}window.shade($id$wrappedData)$wrappedSuffix })()"
     }
     fun executeScript(@Language("JavaScript 1.8") js : String) {
@@ -300,8 +301,8 @@ class ClientContext(private val clientId : UUID, val root : ShadeRoot) {
     }
 
 
-    private fun runExpressionWithTemplate(template : (Long)->String) : CompletableDeferred<String> {
-        val future = CompletableDeferred<String>()
+    private fun runExpressionWithTemplate(template : (Long)->String) : CompletableDeferred<Json> {
+        val future = CompletableDeferred<Json>()
         var id : Long? = null
         id = storeCallback(CallbackData(
             callback = {
@@ -322,7 +323,7 @@ class ClientContext(private val clientId : UUID, val root : ShadeRoot) {
      * Run a JS expression and return the JSONified result.
      */
     fun runExpression(
-        @Language("JavaScript 1.8", prefix = "var result = ", suffix = ";") js : String) : CompletableDeferred<String> {
+        @Language("JavaScript 1.8", prefix = "var result = ", suffix = ";") js : String) : CompletableDeferred<Json> {
         return runExpressionWithTemplate {id -> "var result = $js;\nwindow.shade($id, JSON.stringify(result))" }
     }
 
@@ -330,7 +331,7 @@ class ClientContext(private val clientId : UUID, val root : ShadeRoot) {
      * Run a JS snippet with the "shadeCb" and "shadeErr" functions in immediate scope.
      * Call shadeCb(data) to return data, or shadeErr(error) to throw an exception.
      */
-    fun runWithCallback(@Language("JavaScript 1.8", prefix = "function cb(data){}; ", suffix = ";") js : String) : CompletableDeferred<String> {
+    fun runWithCallback(@Language("JavaScript 1.8", prefix = "function cb(data){}; ", suffix = ";") js : String) : CompletableDeferred<Json> {
         return runExpressionWithTemplate {id -> "(function(){ function shadeErr(e){ sendIfError(e, $id, script.substring(0,256)) }; function shadeCb(data){ window.shade($id, JSON.stringify(data)) }; $js; })()" }
     }
 
@@ -338,13 +339,13 @@ class ClientContext(private val clientId : UUID, val root : ShadeRoot) {
      * Run a JS expression that returns a promise, returning the JSON representation of the promise's resolution or throwing
      * a JavascriptException if processing failed.
      */
-    fun runPromise(@Language("JavaScript 1.8", prefix = "var result = ", suffix = ";") js : String) : CompletableDeferred<String> {
+    fun runPromise(@Language("JavaScript 1.8", prefix = "var result = ", suffix = ";") js : String) : CompletableDeferred<Json> {
         return runWithCallback("var result = $js; result.then(shadeCb).catch(shadeErr);")
     }
 }
 
 private data class CallbackData(
-    val callback : suspend (String?)->Unit,
+    val callback : suspend (Json?)->Unit,
     val onError : (suspend(JavascriptException)->Unit)?,
     val requireEventLock : Boolean
 )

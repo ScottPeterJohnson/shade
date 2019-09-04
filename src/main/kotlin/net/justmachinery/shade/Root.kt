@@ -125,7 +125,7 @@ class ShadeRoot(
                             if(isError){
                                 clientData!!.onCallbackError(callbackId, error)
                             } else {
-                                clientData!!.callCallback(callbackId, data.ifBlank { null })
+                                clientData!!.callCallback(callbackId, data.ifBlank { null }?.let { Json(it) })
                             }
                         }
                     }
