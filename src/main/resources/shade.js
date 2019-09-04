@@ -182,75 +182,93 @@
             current = current.nextSibling;
         }
         patchChildren(target.parentElement, target, included, htmlDom.childNodes);
+        runElementScripts(target.parentElement);
     }
-    if (!window.shade) {
-        let socketReady = false;
-        const socketReadyQueue = [];
-        let socket;
-        function connectSocket() {
-            socket = new WebSocket((window.location.protocol === "https:" ? "wss://" : "ws://") + (window.shadeHost || window.location.host) + window.shadeEndpoint);
-            socket.onopen = function () {
-                const id = window.shadeId;
-                console.log("Connected with ID " + id);
-                socket.send(id);
-                socketReady = true;
-                while (socketReadyQueue.length > 0) {
-                    sendMessage(socketReadyQueue.shift(), null);
-                }
-            };
-            socket.onmessage = function (event) {
-                const data = event.data;
-                const splitIndex = data.indexOf('|');
-                const tag = data.substring(0, splitIndex);
-                const script = data.substring(splitIndex + 1, data.length);
+    function runElementScripts(base) {
+        base.querySelectorAll("[data-shade-element-js]").forEach((value) => {
+            const oldJs = value.shadeElementJs;
+            const newJs = value.getAttribute("data-shade-element-js");
+            if (newJs != oldJs) {
+                // noinspection JSUnusedLocalSymbols
+                const it = value;
                 try {
-                    eval(script);
+                    eval(newJs);
+                    value.shadeElementJs = newJs;
                 }
                 catch (e) {
-                    sendIfError(e, tag, event.data.substring(0, 256));
+                    sendIfError(e, undefined, newJs);
                 }
-            };
-            socket.onclose = function (evt) {
-                console.log(`Socket closed: ${evt.reason}, ${evt.wasClean}`);
-                socketReady = false;
-                if (evt.wasClean) {
-                    //connectSocket()
-                }
-                else {
-                    location.reload(true);
-                }
-            };
-            socket.onerror = function (evt) {
-                console.log(`Socket closed: ${evt}`);
-                socketReady = false;
-                location.reload(true);
-            };
-        }
-        function sendMessage(id, msg) {
-            const finalMsg = (msg !== undefined && msg !== null) ? id + "|" + msg : id + "|";
-            if (socketReady) {
-                socket.send(finalMsg);
+            }
+        });
+    }
+    let socketReady = false;
+    const socketReadyQueue = [];
+    let socket;
+    function connectSocket() {
+        socket = new WebSocket((window.location.protocol === "https:" ? "wss://" : "ws://") + (window.shadeHost || window.location.host) + window.shadeEndpoint);
+        socket.onopen = function () {
+            const id = window.shadeId;
+            console.log("Connected with ID " + id);
+            socket.send(id);
+            socketReady = true;
+            while (socketReadyQueue.length > 0) {
+                sendMessage(socketReadyQueue.shift(), null);
+            }
+        };
+        socket.onmessage = function (event) {
+            const data = event.data;
+            const splitIndex = data.indexOf('|');
+            const tag = data.substring(0, splitIndex);
+            const script = data.substring(splitIndex + 1, data.length);
+            try {
+                eval(script);
+            }
+            catch (e) {
+                sendIfError(e, tag, event.data.substring(0, 256));
+            }
+        };
+        socket.onclose = function (evt) {
+            console.log(`Socket closed: ${evt.reason}, ${evt.wasClean}`);
+            socketReady = false;
+            if (evt.wasClean) {
+                //connectSocket()
             }
             else {
-                socketReadyQueue.push(finalMsg);
+                location.reload(true);
             }
+        };
+        socket.onerror = function (evt) {
+            console.log(`Socket closed: ${evt}`);
+            socketReady = false;
+            location.reload(true);
+        };
+    }
+    function sendMessage(id, msg) {
+        const finalMsg = (msg !== undefined && msg !== null) ? id + "|" + msg : id + "|";
+        if (socketReady) {
+            socket.send(finalMsg);
         }
-        function sendIfError(error, tag, evalText) {
-            const data = error instanceof Error ? {
-                name: error.name,
-                jsMessage: error.message,
-                stack: error.stack,
-                eval: evalText,
-                tag: tag
-            } : {
-                name: "Unknown",
-                jsMessage: "Unknown error: " + error,
-                stack: "",
-                eval: evalText,
-                tag: tag
-            };
-            socket.send(`E${tag == undefined ? "" : tag}|` + JSON.stringify(data));
+        else {
+            socketReadyQueue.push(finalMsg);
         }
+    }
+    function sendIfError(error, tag, evalText) {
+        const data = error instanceof Error ? {
+            name: error.name,
+            jsMessage: error.message,
+            stack: error.stack,
+            eval: evalText,
+            tag: tag
+        } : {
+            name: "Unknown",
+            jsMessage: "Unknown error: " + error,
+            stack: "",
+            eval: evalText,
+            tag: tag
+        };
+        socket.send(`E${tag == undefined ? "" : tag}|` + JSON.stringify(data));
+    }
+    if (!window.shade) {
         connectSocket();
         setInterval(() => {
             if (socketReady) {
@@ -263,6 +281,9 @@
         });
         window.addEventListener('unhandledrejection', function (event) {
             sendIfError(event.reason);
+        });
+        window.addEventListener('DOMContentLoaded', function () {
+            runElementScripts(document.documentElement);
         });
     }
 })();

@@ -199,80 +199,98 @@
         }
 
 
-        patchChildren(target.parentElement!!, target, included, htmlDom.childNodes)
+        patchChildren(target.parentElement!!, target, included, htmlDom.childNodes);
+        runElementScripts(target.parentElement!!);
     }
 
+    function runElementScripts(base : HTMLElement){
+        base.querySelectorAll("[data-shade-element-js]").forEach((value)=>{
+            const oldJs : string|undefined = (value as any).shadeElementJs;
+            const newJs = value.getAttribute("data-shade-element-js")!;
+            if(newJs != oldJs){
+                // noinspection JSUnusedLocalSymbols
+                const it = value;
+                try {
+                    eval(newJs);
+                    (value as any).shadeElementJs = newJs;
+                } catch(e){
+                    sendIfError(e, undefined, newJs)
+                }
+            }
+        })
+    }
 
+    let socketReady = false;
+    const socketReadyQueue : string[] = [];
+    let socket : WebSocket;
+
+    function connectSocket(){
+        socket = new WebSocket((window.location.protocol === "https:" ? "wss://" : "ws://") + ((window as any).shadeHost || window.location.host) + (window as any).shadeEndpoint);
+        socket.onopen = function() {
+            const id = (window as any).shadeId;
+            console.log("Connected with ID " + id);
+            socket.send(id);
+            socketReady = true;
+            while (socketReadyQueue.length > 0) {
+                sendMessage(socketReadyQueue.shift()!, null);
+            }
+        };
+
+        socket.onmessage = function(event) {
+            const data = (event.data as string);
+            const splitIndex = data.indexOf('|');
+            const tag = data.substring(0, splitIndex);
+            const script = data.substring(splitIndex+1, data.length);
+            try {
+                eval(script);
+            } catch(e){
+                sendIfError(e, tag, event.data.substring(0, 256));
+            }
+        };
+        socket.onclose = function(evt) {
+            console.log(`Socket closed: ${evt.reason}, ${evt.wasClean}`);
+            socketReady = false;
+            if (evt.wasClean){
+                //connectSocket()
+            } else {
+                location.reload(true);
+            }
+        };
+        socket.onerror = function(evt) {
+            console.log(`Socket closed: ${evt}`);
+            socketReady = false;
+            location.reload(true);
+        };
+    }
+
+    function sendMessage(id : string, msg : string|undefined|null) {
+        const finalMsg = (msg !== undefined && msg !== null) ? id + "|" + msg : id + "|";
+        if (socketReady) {
+            socket.send(finalMsg);
+        } else {
+            socketReadyQueue.push(finalMsg);
+        }
+    }
+
+    function sendIfError(error : object, tag?: string, evalText ?: string){
+        const data = error instanceof Error ? {
+            name: error.name,
+            jsMessage: error.message,
+            stack : error.stack,
+            eval: evalText,
+            tag: tag
+        } : {
+            name: "Unknown",
+            jsMessage: "Unknown error: " + error,
+            stack: "",
+            eval: evalText,
+            tag: tag
+        };
+        socket.send(`E${tag == undefined ? "" : tag}|` + JSON.stringify(data));
+    }
 
     if(!(window as any).shade){
-        let socketReady = false;
-        const socketReadyQueue : string[] = [];
-        let socket : WebSocket;
 
-        function connectSocket(){
-            socket = new WebSocket((window.location.protocol === "https:" ? "wss://" : "ws://") + ((window as any).shadeHost || window.location.host) + (window as any).shadeEndpoint);
-            socket.onopen = function() {
-                const id = (window as any).shadeId;
-                console.log("Connected with ID " + id);
-                socket.send(id);
-                socketReady = true;
-                while (socketReadyQueue.length > 0) {
-                    sendMessage(socketReadyQueue.shift()!, null);
-                }
-            };
-
-            socket.onmessage = function(event) {
-                const data = (event.data as string);
-                const splitIndex = data.indexOf('|');
-                const tag = data.substring(0, splitIndex);
-                const script = data.substring(splitIndex+1, data.length);
-                try {
-                    eval(script);
-                } catch(e){
-                    sendIfError(e, tag, event.data.substring(0, 256));
-                }
-            };
-            socket.onclose = function(evt) {
-                console.log(`Socket closed: ${evt.reason}, ${evt.wasClean}`);
-                socketReady = false;
-                if (evt.wasClean){
-                    //connectSocket()
-                } else {
-                    location.reload(true);
-                }
-            };
-            socket.onerror = function(evt) {
-                console.log(`Socket closed: ${evt}`);
-                socketReady = false;
-                location.reload(true);
-            };
-        }
-
-        function sendMessage(id : string, msg : string|undefined|null) {
-            const finalMsg = (msg !== undefined && msg !== null) ? id + "|" + msg : id + "|";
-            if (socketReady) {
-                socket.send(finalMsg);
-            } else {
-                socketReadyQueue.push(finalMsg);
-            }
-        }
-
-        function sendIfError(error : object, tag?: string, evalText ?: string){
-            const data = error instanceof Error ? {
-                name: error.name,
-                jsMessage: error.message,
-                stack : error.stack,
-                eval: evalText,
-                tag: tag
-            } : {
-                name: "Unknown",
-                jsMessage: "Unknown error: " + error,
-                stack: "",
-                eval: evalText,
-                tag: tag
-            };
-            socket.send(`E${tag == undefined ? "" : tag}|` + JSON.stringify(data));
-        }
 
         connectSocket();
 
@@ -289,6 +307,10 @@
         });
         window.addEventListener('unhandledrejection', function(event : PromiseRejectionEvent){
             sendIfError(event.reason);
+        });
+
+        window.addEventListener('DOMContentLoaded', function(){
+            runElementScripts(document.documentElement);
         });
     }
 })();

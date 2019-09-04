@@ -5,6 +5,7 @@ import kotlinx.html.CommonAttributeGroupFacade
 import kotlinx.html.HtmlBlockTag
 import kotlinx.html.HtmlTagMarker
 import kotlinx.html.style
+import org.intellij.lang.annotations.Language
 import org.slf4j.MDC
 
 @HtmlTagMarker
@@ -43,3 +44,9 @@ var HtmlBlockTag.key : String?
             attributes.remove("data-key")
         }
     }
+
+
+
+fun HtmlBlockTag.applyJs(@Language("JavaScript 1.8", prefix = "const it = document.createElement('div'); ") js : String){
+    attributes["data-shade-element-js"] = js
+}

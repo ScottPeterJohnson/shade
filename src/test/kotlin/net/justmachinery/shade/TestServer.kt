@@ -109,6 +109,8 @@ class RootComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) 
             }
 
             add(KeyRerenderTest::class, Unit)
+
+            add(ApplyJsTest::class, Unit)
         }
     }
 
@@ -236,6 +238,28 @@ class KeyRerenderTestShow(fullProps : Props<Int>) : Component<Int, HtmlBlockTag>
         div(classes = "flashNumber") {
             testBackground()
             +"I am component $props"
+        }
+    }
+}
+
+class ApplyJsTest(fullProps : Props<Unit>) : Component<Unit, HtmlBlockTag>(fullProps){
+    var unchanged by observable(0)
+    var counter by observable(0)
+    override fun HtmlBlockTag.render() {
+        div {
+            applyJs("it.innerHTML = 'hello world'; console.log('js applied: $counter')")
+        }
+        button {
+            onClick {
+                unchanged += 1
+            }
+            +"Click to rerender w/o changing JS ($unchanged)"
+        }
+        button {
+            onClick {
+                counter += 1
+            }
+            +"Click to rerender w/ changing JS ($counter)"
         }
     }
 }
