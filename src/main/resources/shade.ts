@@ -184,10 +184,9 @@
         return finalChildren;
     }
 
-    function r(targetId : string, base64 : string){
+    function r(targetId : string, html : string){
         const target = document.getElementById(targetId);
         if(!target){ return }
-        const html = atob(base64);
         const htmlDom = document.createElement('div');
         htmlDom.innerHTML = html;
 

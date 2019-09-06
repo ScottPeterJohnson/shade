@@ -144,7 +144,7 @@ private class SubComponentShowingCounter(props : Props<ClientObservableState<Int
     override fun HtmlBlockTag.render() {
         div {
             testBackground()
-            +"Counter is $props"
+            +"Counter is $props ✓"
         }
     }
 }

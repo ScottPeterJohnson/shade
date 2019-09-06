@@ -7,6 +7,7 @@ import kotlinx.html.stream.appendHTML
 import kotlinx.html.visit
 import net.justmachinery.shade.Component
 import net.justmachinery.shade.Props
+import org.apache.commons.text.StringEscapeUtils
 import java.io.ByteArrayOutputStream
 import java.util.*
 import kotlin.reflect.KClass
@@ -56,10 +57,11 @@ internal fun <RenderIn : Tag> Component<*, RenderIn>.updateRender(clazz : KClass
             renderInternal(tag, addMarkers = false)
             consumer.finalize()
         }
-        baos.toByteArray()
+        baos.toString(Charsets.UTF_8)
     }
-    val base64 = Base64.getEncoder().encode(html).toString(Charsets.UTF_8)
-    context.executeScript("r(\"${renderState.componentId}\",\"$base64\");")
+
+    val escapedHtml = StringEscapeUtils.escapeEcmaScript(html)
+    context.executeScript("r(\"${renderState.componentId}\",\"$escapedHtml\");")
 }
 
 
