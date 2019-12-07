@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicLong
 /**
  * Stores and manages state for a particular client connection.
  */
-class ClientContext(private val clientId : UUID, val root : ShadeRoot) {
+class ClientContext(val clientId : UUID, val root : ShadeRoot) {
     companion object : KLogging()
     private inline fun <T> logging(cb: ()->T) : T {
         return withLoggingInfo("shadeClientId" to clientId.toString()){
@@ -154,7 +154,7 @@ class ClientContext(private val clientId : UUID, val root : ShadeRoot) {
                 if(onError != null){
                     onError(exception)
                 } else {
-                    root.onUncaughtJavascriptException(exception)
+                    root.onUncaughtJavascriptException(this@ClientContext, exception)
                 }
             } catch(t : Throwable){
                 if(t is CancellationException){

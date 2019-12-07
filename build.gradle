@@ -13,7 +13,12 @@ apply plugin: 'maven'
 apply plugin: 'maven-publish'
 
 group 'net.justmachinery'
-version '0.0.21'
+version '0.0.22'
+
+task testServer(type: JavaExec){
+    classpath = sourceSets.test.runtimeClasspath
+    main = "net.justmachinery.shade.TestServerKt"
+}
 
 task sourcesJar(type: Jar) {
     from sourceSets.main.allSource

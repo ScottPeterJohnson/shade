@@ -5,46 +5,107 @@ import kotlinx.coroutines.launch
 import kotlinx.css.Color
 import kotlinx.css.backgroundColor
 import kotlinx.html.*
-import kotlinx.html.stream.appendHTML
+import kotlinx.html.stream.createHTML
 import org.eclipse.jetty.websocket.api.Session
 import org.eclipse.jetty.websocket.api.annotations.OnWebSocketClose
 import org.eclipse.jetty.websocket.api.annotations.OnWebSocketConnect
 import org.eclipse.jetty.websocket.api.annotations.OnWebSocketMessage
 import org.eclipse.jetty.websocket.api.annotations.WebSocket
-import spark.Service.ignite
-import java.io.ByteArrayOutputStream
+import spark.Service
+import java.awt.Desktop
+import java.net.URI
 import java.util.*
 
 fun main(){
-    ServerTest().run()
-}
+    //A simple demo page for Shade using the spark web framework.
+    //Any web framework can be used, as long as it supports websockets.
+    Service.ignite().apply {
+        port(9905)
 
-fun DIV.testBackground(){
-    fun gen() = Random().nextInt(255).toString(16).padStart(2, '0')
+        //Setup a websocket handler
+        webSocketIdleTimeoutMillis(120 * 1000)
+        webSocket("/shade", WebSocketHandler::class.java)
 
-    withStyle {
-        backgroundColor = Color("#${gen()}${gen()}${gen()}")
+        //Create a test page that uses shade.
+        get("/test"){ request, response ->
+            createHTML(prettyPrint = false).html {
+                body {
+                    //You can mix shade with normal HTML templates.
+                    h2 {
+                        +"Shade demo page"
+                    }
+                    root.installFramework(this){ context ->
+                        root.component(context, this, RootComponent::class, Unit)
+                    }
+                }
+            }
+        }
+    }
+    if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+        Desktop.getDesktop().browse(URI("http://localhost:9905/test"));
     }
 }
 
-class SharedRootState(context : ClientContext) : StateContainer(context){
-    var text by observable("")
+val root = ShadeRoot(
+    endpoint = "/shade"
+)
+
+/**
+ * The websocket handler just needs to pass messages to a client-associated shade handler, and be able to send messages in turn.
+ */
+@WebSocket
+class WebSocketHandler {
+    private val sessions = Collections.synchronizedMap(mutableMapOf<Session, ShadeRoot.MessageHandler>())
+    @OnWebSocketConnect
+    fun connected(session: Session) {}
+
+    @OnWebSocketClose
+    fun closed(session: Session, statusCode: Int, reason: String?) {
+        sessions.remove(session)?.onDisconnect()
+    }
+
+    @OnWebSocketMessage
+    fun message(session: Session, message: String) {
+        sessions.getOrPut(session){
+            root.handler(
+                send = { session.remote.sendString(it) },
+                disconnect = { session.disconnect() }
+            )
+        }.onMessage(message)
+    }
 }
 
-class RootComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) {
+/**
+ * This is our root component. A component is, like React, a combination of props, state, and the ability to rerender as
+ * a chunk.
+ */
+class RootComponent(fullProps : Props<Unit>)
+    : Component<Unit /* Takes effectively no props */, HtmlBlockTag /* Can be added under any block tag */>(fullProps) {
+    //This is the syntax for an observable piece of per-component state.
+    //When it's reassigned, this component is marked as dirty and will be redrawn.
     var todo by observable(emptyList<String>())
     var counter = observable(0)
+
+    //We can also package state up in an observable wrapper class and pass it between components.
+    inner class SharedRootState(context : ClientContext) : StateContainer(context){
+        var text by observable("")
+    }
     val sharedState = SharedRootState(context)
+
     var newTaskName : String = ""
+
+    //Render function. Should be a function of state and props, like React.
     override fun HtmlBlockTag.render() {
         div {
-            testBackground()
+            newBackgroundColorOnRerender()
             div {
-                +"Hello!"
+                +"Welcome to Shade!"
+                //We can add subcomponents anywhere
                 add(SubComponent::class, Unit)
             }
 
             div {
+                //All standard kotlin logic is supported. Render however makes sense to you.
                 todo.forEach {
                     add(TodoComponent::class, it)
                 }
@@ -52,6 +113,7 @@ class RootComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) 
 
             input {
                 type = InputType.text
+                //We directly bind the input's value to serverside state.
                 onValueChange {
                     newTaskName = it
                 }
@@ -72,21 +134,30 @@ class RootComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) 
             }
             div {
                 +"The counter is: "
+                //This is an example of passing a prop that changes
                 add(SubComponentShowingCounter::class, counter)
             }
             table {
                 tbody {
+                    //Here we add two table row components, which can only be added inside of a TBODY because their
+                    //component type is Component<..., TBODY>
                     add(TableRowComponent::class, 3)
                     add(TableRowComponent::class, 4)
                 }
             }
+
+            //Share some state between two components
             add(SharedStateRender::class, sharedState)
             add(SharedStateInput::class, sharedState)
 
             button{
                 onClick {
+                    //We can execute JS as necessary in our action handlers.
                     context.executeScript("setTimeout(function(){ throw Error(\"I am a delayed error\") }, 3000)")
+                    //We can also evaluate JS expressions. This particular one will throw an error, which will
+                    //appear as a JavascriptException.
                     val js = context.runExpression("notAValidSymbol").await()
+                    //Both errors will by default appear in server logs.
                     println("Shouldn't get here: $js")
                 }
                 +"Click me to throw an error"
@@ -94,8 +165,10 @@ class RootComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) 
             button{
                 onClick {
                     try {
+                        //This is an example of erroring from a JS Promise expression.
                         context.runPromise("new Promise(function(request, reject){ setTimeout(function(){ reject(Error(\"I am a delayed promise error\")) }, 3000) })").await()
                     } catch(e : JavascriptException){
+                        //We can catch the error if necessary.
                         println("Error caught! $e")
                     }
                 }
@@ -103,6 +176,7 @@ class RootComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) 
             }
             button{
                 onClick {
+                    //Since handlers run in coroutines, they can delay without consuming a thread
                     delay(100 * 1000 * 1000)
                 }
                 +"Launch a long-running coroutine"
@@ -115,6 +189,7 @@ class RootComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) 
     }
 
     override fun mounted() {
+        //The mounted() lifecycle function allows you to e.g. run JS expressions when the component is mounted
         launch {
             val result = context.runPromise("new Promise(function(resolve, reject){ setTimeout(function(){ resolve('foo') }, 3000)})").await()
             println("Got: $result")
@@ -122,10 +197,20 @@ class RootComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) 
     }
 }
 
+//Helper function just displays a new background color to make it easy to tell what causes a rerender.
+fun DIV.newBackgroundColorOnRerender(){
+    fun gen() = Random().nextInt(255).toString(16).padStart(2, '0')
+
+    withStyle {
+        backgroundColor = Color("#${gen()}${gen()}${gen()}40")
+    }
+}
+
+
 class TodoComponent(props : Props<String>) : Component<String, HtmlBlockTag>(props){
     override fun HtmlBlockTag.render() {
         div {
-            testBackground()
+            newBackgroundColorOnRerender()
             +"TODO: $props"
         }
     }
@@ -134,8 +219,8 @@ class TodoComponent(props : Props<String>) : Component<String, HtmlBlockTag>(pro
 class SubComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) {
     override fun HtmlBlockTag.render() {
         div {
-            testBackground()
-            +"I am sub-component; hear me roar"
+            newBackgroundColorOnRerender()
+            +"This text was rendered in a sub component."
         }
     }
 }
@@ -143,7 +228,7 @@ class SubComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) {
 private class SubComponentShowingCounter(props : Props<ClientObservableState<Int>>) : Component<ClientObservableState<Int>, HtmlBlockTag>(props) {
     override fun HtmlBlockTag.render() {
         div {
-            testBackground()
+            newBackgroundColorOnRerender()
             +"Counter is $props ✓"
         }
     }
@@ -154,25 +239,25 @@ class TableRowComponent(props : Props<Int>) : Component<Int, TBODY>(props) {
         tr {
             td {
                 div {
-                    testBackground()
-                    +"Hello!"
+                    newBackgroundColorOnRerender()
+                    +"Table row component"
                 }
 
             }
             td {
-                +"I am $props"
+                +"Value: $props"
             }
         }
     }
 }
 
-class SharedStateRender(props : Props<SharedRootState>) : Component<SharedRootState, HtmlBlockTag>(props){
+class SharedStateRender(props : Props<RootComponent.SharedRootState>) : Component<RootComponent.SharedRootState, HtmlBlockTag>(props){
     override fun HtmlBlockTag.render() {
         +"You entered: ${props.text}"
     }
 }
 
-class SharedStateInput(props : Props<SharedRootState>) : Component<SharedRootState, HtmlBlockTag>(props){
+class SharedStateInput(props : Props<RootComponent.SharedRootState>) : Component<RootComponent.SharedRootState, HtmlBlockTag>(props){
     override fun HtmlBlockTag.render() {
         div {
             input {
@@ -184,10 +269,16 @@ class SharedStateInput(props : Props<SharedRootState>) : Component<SharedRootSta
     }
 }
 
+/**
+ * This example tests efficient rerendering of components by key.
+ * Like React, keys are used to distinguish between components added in arrays or foreach loops,
+ * which might retain an identity but change their number or positioning.
+ */
 class KeyRerenderTest(fullProps : Props<Unit>) : Component<Unit, HtmlBlockTag>(fullProps) {
     var numbersList by observable((0 until 10).toList())
     override fun HtmlBlockTag.render() {
         style {
+            //Animation should flash whenever a component is newly created.
             //language=CSS
             unsafe { raw("""
                 @keyframes flash {
@@ -206,12 +297,13 @@ class KeyRerenderTest(fullProps : Props<Unit>) : Component<Unit, HtmlBlockTag>(f
         div {
             numbersList.forEach {
                 div(classes = "flashNumber") {
+                    //We can give DOM elements keys
                     key = it.toString()
                     +"I am $it"
                 }
                 if(it.rem(2) == 0){
                     div(classes = "flashNumber") {
-                        +"I am not a number"
+                        +"($it is even)"
                     }
                 }
             }
@@ -219,7 +311,7 @@ class KeyRerenderTest(fullProps : Props<Unit>) : Component<Unit, HtmlBlockTag>(f
                 add(KeyRerenderTestShow::class, it, key = it.toString())
                 if(it.rem(2) == 0){
                     div(classes = "flashNumber") {
-                        +"I am also not a number"
+                        +"($it is even)"
                     }
                 }
             }
@@ -236,12 +328,16 @@ class KeyRerenderTest(fullProps : Props<Unit>) : Component<Unit, HtmlBlockTag>(f
 class KeyRerenderTestShow(fullProps : Props<Int>) : Component<Int, HtmlBlockTag>(fullProps){
     override fun HtmlBlockTag.render() {
         div(classes = "flashNumber") {
-            testBackground()
+            newBackgroundColorOnRerender()
             +"I am component $props"
         }
     }
 }
 
+/**
+ * Using applyJs() we can specify JS to be executed when a DOM element is created, but not on subsequent rerenders.
+ * This component uses this wrongly to change DOM, which can be overridden on a rerender.
+ */
 class ApplyJsTest(fullProps : Props<Unit>) : Component<Unit, HtmlBlockTag>(fullProps){
     var unchanged by observable(0)
     var counter by observable(0)
@@ -265,57 +361,3 @@ class ApplyJsTest(fullProps : Props<Unit>) : Component<Unit, HtmlBlockTag>(fullP
 }
 
 
-class ServerTest {
-    fun run(){
-        ignite().apply {
-            port(9905)
-            get("/test"){ request, response ->
-                ByteArrayOutputStream().let { baos ->
-                    baos.writer().buffered().use {
-                        it.appendHTML(prettyPrint = false).html {
-                            body {
-                                root.installFramework(this){ context ->
-                                    root.component(context, this, RootComponent::class, Unit)
-                                }
-                            }
-                        }
-                    }
-                    baos.toByteArray().toString(Charsets.UTF_8)
-                }
-            }
-        }
-        ignite().apply {
-            port(9906)
-            webSocketIdleTimeoutMillis(120 * 1000)
-            webSocket("/shade", WebSocketHandler::class.java)
-            get("/test"){ request, response ->
-                "<div>Hello world!</div>"
-            }
-        }
-    }
-}
-
-val root = ShadeRoot(
-    endpoint = "/shade",
-    host = "localhost:9906"
-)
-
-@WebSocket
-class WebSocketHandler {
-    private val sessions = Collections.synchronizedMap(mutableMapOf<Session, ShadeRoot.MessageHandler>())
-    @OnWebSocketConnect
-    fun connected(session: Session) {}
-
-    @OnWebSocketClose
-    fun closed(session: Session, statusCode: Int, reason: String?) {
-        sessions.remove(session)?.onDisconnect()
-    }
-
-    @OnWebSocketMessage
-    fun message(session: Session, message: String) {
-
-        sessions.getOrPut(session){
-            root.handler(send = { session.remote.sendString(it) }, disconnect = { session.disconnect() })
-        }.onMessage(message)
-    }
-}
