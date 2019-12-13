@@ -3,7 +3,9 @@ package net.justmachinery.shade
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.css.Color
+import kotlinx.css.FontWeight
 import kotlinx.css.backgroundColor
+import kotlinx.css.fontWeight
 import kotlinx.html.*
 import kotlinx.html.stream.createHTML
 import org.eclipse.jetty.websocket.api.Session
@@ -360,4 +362,38 @@ class ApplyJsTest(fullProps : Props<Unit>) : Component<Unit, HtmlBlockTag>(fullP
     }
 }
 
-
+//This code is used in the README, and is replicated here to make sure it compiles.
+data class TodoListProps(val userName : String)
+class TodoList(fullProps : Props<TodoListProps>) : Component<TodoListProps, HtmlBlockTag>(fullProps) {
+    var todoList by observable(listOf<String>())
+    var newItem by observable("")
+    override fun HtmlBlockTag.render(){
+        p {
+            +"Hello, "
+            span {
+                withStyle {
+                    fontWeight = FontWeight.bold
+                }
+                +props.userName
+            }
+        }
+        todoList.forEach { item ->
+            div {
+                key = item
+                +"TODO: "
+                +item
+            }
+        }
+        +"Add a new item:"
+        input(type = InputType.text){
+            onValueChange {
+                newItem = it
+            }
+        }
+        button {
+            onClick {
+                todoList = todoList + newItem
+            }
+        }
+    }
+}

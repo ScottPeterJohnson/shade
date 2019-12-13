@@ -213,7 +213,7 @@ class ClientContext(val clientId : UUID, val root : ShadeRoot) {
                 currentCallback(currentData)
             } catch(t : Throwable){
                 if(t is CancellationException){
-                    logger.info(t) { "Error processing callback cancelled" }
+                    logger.info(t) { "Callback cancelled" }
                 } else {
                     logger.error(t) { "Error processing event callback" }
                 }

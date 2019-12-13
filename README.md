@@ -3,17 +3,86 @@
 
 # Shade
 
-Shade is an experimental web library framework for Kotlin. Using it allows you to quickly and efficiently
+Shade is an experimental web library framework for Kotlin on the JVM. Using it allows you to quickly and efficiently
 build interactive websites.
 
-Conceptually, it's a combination of [Kweb](http://docs.kweb.io/en/latest/index.html), [React](https://reactjs.org/), [MobX](https://mobx.js.org/README.html), and the [kotlinx HTML DSL](https://github.com/Kotlin/kotlinx.html).
+Conceptually, it's a combination of [Kweb](http://docs.kweb.io/en/latest/index.html), [React](https://reactjs.org/), [MobX](https://mobx.js.org/README.html), and the [kotlinx HTML DSL](https://github.com/Kotlin/kotlinx.html). The core idea is to:
+- Write HTML with a server-side DSL, allowing you to use one language and treat writing webpages just like any other code
+- Break that HTML into a series of logical components, which can be configured with properties and have internal state. Components will automatically rerender themselves when either changes.
+- Communicate with user's web browser over a websocket connection, allowing seamless integration of
+user actions and server-side responses
+
+## A Quick Sample
+This example shows a simple TODO list component:
+```kotlin
+data class TodoListProps(val userName : String)
+class TodoList(fullProps : Props<TodoListProps>) : Component<TodoListProps, HtmlBlockTag>(fullProps) {
+    var todoList by observable(listOf<String>())
+    var newItem = ""
+    override fun HtmlBlockTag.render(){
+        p {
+            +"Hello, "
+            span {
+                withStyle {
+                    fontWeight = FontWeight.bold
+                }
+                +props.userName
+            }
+        }
+        todoList.forEach { item ->
+            div {
+                key = item
+                +"TODO: "
+                +item
+            }
+        }
+        +"Add a new item:"
+        input(type = InputType.text){
+            onValueChange {
+                newItem = it
+            }
+        }
+        button {
+            onClick {
+                todoList = todoList + newItem
+            }
+        }
+    }
+}
+```
+Whenever either the user name or the items in the todoList change, the view will update itself on the client.
+
+## Cost/Benefit
+While for developers this is a much better way to work, server-driven web pages aren't a free lunch. Consider your use case closely. Note that some of these tradeoffs will change as the framework
+matures and opens up new ways to circumvent earlier limitations.
+
+### Pros
+- Only one language and target required: Kotlin JVM
+- Very lightweight for the client, compared to hefty JS frameworks
+- Page can render on the first server-client roundtrip, and update from there
+- Extremely simple to do push notifications on the client
+- Extremely simple to add action callbacks (no more defining routes!)
+- Kotlinx DSL is excellent, complete and mostly type-safe
+- Security is more straightforward, since most state and logic lives on the server and can't be easily faked
+
+### Cons
+- Latency. This could be a big one if your users have poor latency and need tons of actions to navigate your interfaces. (This might be improved in the future to "preload" changes on the client.)
+- More work is done by the server. More bandwidth may be required for long lived, highly dynamic pages.
+- State that lives on the server dies if that server does, which could interrupt user's work.
 
 ## How is Shade different from Kweb?
 - Shade uses the Kotlinx HTML DSL
+    - Kweb uses its own, less complete DSL
 - Shade is less opinionated about choice of web server and is designed to be
-drop-in for projects already using the Kotlinx HTML DSL
-- Shade does not provide routing or database bindings
+drop-in for projects already using the Kotlinx HTML DSL, or embedded within any HTML
+    - Kweb runs on its own Ktor server
+- Shade does not (yet) provide routing or database bindings
 - Shade is based on components and reactive rerendering, like everything is wrapped in a granular kweb `render {}` block
+    - Kweb has a more imperative update style
+- Shade does not currently have any "immediate events" beyond allowing arbitrary JavaScript
+- Shade likely has a faster initial page render than Kweb
+
+[Kweb](http://docs.kweb.io/en/latest/index.html) is lovely and might be a better fit for your needs.
 
 ## Demo
 Clone this project and run `./gradlew testServer` to play with a simple demo page. Check [TestServer.kt](https://github.com/ScottPeterJohnson/shade/blob/master/src/test/kotlin/net/justmachinery/shade/TestServer.kt) for an example source.
