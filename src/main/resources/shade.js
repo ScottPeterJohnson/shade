@@ -208,6 +208,7 @@
         socket.onopen = function () {
             const id = window.shadeId;
             console.log("Connected with ID " + id);
+            localStorage.removeItem("shade_error_reload");
             socket.send(id);
             socketReady = true;
             while (socketReadyQueue.length > 0) {
@@ -226,6 +227,22 @@
                 sendIfError(e, tag, event.data.substring(0, 256));
             }
         };
+        let errorTriggered = false;
+        function errorReload() {
+            if (errorTriggered) {
+                return;
+            }
+            errorTriggered = true;
+            const lastReload = localStorage.getItem("shade_error_reload");
+            if (lastReload) {
+                errorDisplay("This web page could not connect to its server. Please reload or try again later.");
+                localStorage.removeItem("shade_last_error_reload");
+            }
+            else {
+                localStorage.setItem("shade_error_reload", "true");
+                location.reload(true);
+            }
+        }
         socket.onclose = function (evt) {
             console.log(`Socket closed: ${evt.reason}, ${evt.wasClean}`);
             socketReady = false;
@@ -233,13 +250,13 @@
                 //connectSocket()
             }
             else {
-                location.reload(true);
+                errorReload();
             }
         };
         socket.onerror = function (evt) {
             console.log(`Socket closed: ${evt}`);
             socketReady = false;
-            location.reload(true);
+            errorReload();
         };
     }
     function sendMessage(id, msg) {
@@ -267,7 +284,20 @@
         };
         socket.send(`E${tag == undefined ? "" : tag}|` + JSON.stringify(data));
     }
+    function errorDisplay(content) {
+        const container = document.createElement("div");
+        container.innerHTML = "<div id='shadeModal' style='position: fixed;z-index: 999999999;left: 0;top: 0;width: 100%;height: 100%;overflow: auto;background-color: rgba(0,0,0,0.4);'><div style='background-color: #fff;margin: 15% auto;padding: 20px;border: 1px solid #888;width: 80%;'><span id='shadeClose' style='float: right;font-size: 28px;font-weight: bold;cursor: pointer;'>&times;</span><p>" + content + "</p></div></div></div>";
+        document.body.appendChild(container);
+        document.getElementById("shadeClose").addEventListener('click', function () {
+            const m = document.getElementById('shadeModal');
+            m.parentNode.removeChild(m);
+        });
+    }
     if (!window.shade) {
+        if (!window.WebSocket) {
+            errorDisplay("Your web browser doesn't support this page, and it may not function correctly as a result. Upgrade your web browser.");
+            return;
+        }
         connectSocket();
         setInterval(() => {
             if (socketReady) {
