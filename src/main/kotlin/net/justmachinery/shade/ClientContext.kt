@@ -149,11 +149,14 @@ class ClientContext(val clientId : UUID, val root : ShadeRoot) {
     internal fun onCallbackError(id : Long, exception : JavascriptException) = logging {
         val callback = getCallback(id)
         coroutineScope.launch(context = MDCContext()){
-            val onError = callback.onError
+            val onError = callback?.onError
             try {
                 if(onError != null){
                     onError(exception)
                 } else {
+                    if(callback == null){
+                        logger.warn { "Callback $id threw $exception but its handler expired" }
+                    }
                     root.onUncaughtJavascriptException(this@ClientContext, exception)
                 }
             } catch(t : Throwable){
@@ -170,6 +173,10 @@ class ClientContext(val clientId : UUID, val root : ShadeRoot) {
     internal fun callCallback(id : Long, data : Json?) : Unit = logging {
         logger.trace { "Calling callback $id with data ${data?.raw?.ellipsizeAfter(100)}" }
         val callback = getCallback(id)
+        if(callback == null){
+            logger.trace { "Cannot call expired callback $id" }
+            return
+        }
         if(callback.requireEventLock) {
             //We need to make sure only one event callback is running at a time, and put any that should run later into
             //a queue.
@@ -239,8 +246,15 @@ class ClientContext(val clientId : UUID, val root : ShadeRoot) {
     }
 
 
-    private fun getCallback(id : Long) : CallbackData {
-        return storedCallbacks[id] ?: throw IllegalStateException("Unknown callback $id")
+    private fun getCallback(id : Long) : CallbackData? {
+        return storedCallbacks[id] ?: run {
+            if(id < nextCallbackId.get()){
+                logger.trace { "Expired callback $id" }
+                null
+            } else {
+                throw IllegalStateException("Unknown callback $id")
+            }
+        }
     }
     internal fun removeCallback(id : Long){
         logger.trace { "Cleanup callback $id" }
