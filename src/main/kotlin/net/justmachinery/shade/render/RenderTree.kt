@@ -2,19 +2,21 @@ package net.justmachinery.shade.render
 
 import kotlinx.html.Tag
 import kotlinx.html.TagConsumer
-import net.justmachinery.shade.Component
+import net.justmachinery.shade.AdvancedComponent
 import java.util.*
 
 
 internal class RenderTreeLocation(
     val parent : RenderTreeLocation?,
     val tagName : String,
+    val tagIndex : Int,
+    var key : String?,
     val children : MutableList<RenderTreeChild> = mutableListOf()
 )
 
 internal sealed class RenderTreeChild {
     data class TagChild(val child : RenderTreeLocation) : RenderTreeChild()
-    data class ComponentChild(val index : Int, val component : Component<*, *>) : RenderTreeChild()
+    data class ComponentChild(val index : Int, val component : AdvancedComponent<*, *>) : RenderTreeChild()
 }
 
 internal class RenderTreeLocationFrame(
@@ -23,12 +25,25 @@ internal class RenderTreeLocationFrame(
     var renderTreeChildIndex : Int = 0
 )
 
+internal data class RenderTreeTagLocation(
+    val parent : RenderTreeTagLocation?,
+    val tagName : String,
+    val childIndex : Int,
+    val key : String?
+)
+internal fun RenderTreeLocation.toRenderTreeTagLocation() : RenderTreeTagLocation = RenderTreeTagLocation(
+    parent = this.parent?.toRenderTreeTagLocation(),
+    tagName = this.tagName,
+    childIndex = if(this.key != null) -1 else this.tagIndex,
+    key = this.key
+)
+
 internal fun <T : Tag> T.updateRenderTree(
     renderState: ComponentRenderState, cb : T.()->Unit
 ){
     val oldRenderTree = renderState.renderTreeRoot
 
-    val newRoot = RenderTreeLocation(null, "(root)")
+    val newRoot = RenderTreeLocation(parent = null, tagName = "(root)", tagIndex = 0, key = null)
     renderState.renderTreeRoot = newRoot
 
     val frame = RenderTreeLocationFrame(
@@ -81,7 +96,9 @@ internal class RenderTreeRecorderConsumer(
             val oldFrame = frameStack.peek()
             val child = RenderTreeLocation(
                 parent = oldFrame.newRenderTreeLocation,
-                tagName = tag.tagName
+                tagName = tag.tagName,
+                tagIndex = oldFrame.renderTreeChildIndex,
+                key = null
             )
             val oldLocation = oldFrame.oldRenderTreeLocation?.children?.getOrNull(oldFrame.renderTreeChildIndex)
 
@@ -105,11 +122,9 @@ internal class RenderTreeRecorderConsumer(
         if(tag.tagName != "script" || tag.attributes["type"] != "shade") {
             val endingFrame = frameStack.pop()
             val parentFrame = frameStack.peek()
-            //The tree should only include nodes with component leaves, as that's what we care about.
             endingFrame.newRenderTreeLocation.let {
-                if (true || it.children.isNotEmpty()) {
-                    parentFrame?.newRenderTreeLocation?.children?.add(RenderTreeChild.TagChild(it))
-                }
+                it.key = tag.attributes["key"]
+                parentFrame?.newRenderTreeLocation?.children?.add(RenderTreeChild.TagChild(it))
             }
 
             renderState.location = parentFrame

@@ -2,10 +2,7 @@ package net.justmachinery.shade
 
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.css.Color
-import kotlinx.css.FontWeight
-import kotlinx.css.backgroundColor
-import kotlinx.css.fontWeight
+import kotlinx.css.*
 import kotlinx.html.*
 import kotlinx.html.stream.createHTML
 import org.eclipse.jetty.websocket.api.Session
@@ -16,9 +13,12 @@ import org.eclipse.jetty.websocket.api.annotations.WebSocket
 import spark.Service
 import java.awt.Desktop
 import java.net.URI
+import java.time.Duration
+import java.time.temporal.ChronoUnit
 import java.util.*
 
 fun main(){
+    setupTestLogging()
     //A simple demo page for Shade using the spark web framework.
     //Any web framework can be used, as long as it supports websockets.
     Service.ignite().apply {
@@ -34,7 +34,7 @@ fun main(){
                 body {
                     //You can mix shade with normal HTML templates.
                     h2 {
-                        +"Shade demo page"
+                        +"Shade test page"
                     }
                     root.installFramework(this){ context ->
                         root.component(context, this, RootComponent::class, Unit)
@@ -81,8 +81,8 @@ class WebSocketHandler {
  * This is our root component. A component is, like React, a combination of props, state, and the ability to rerender as
  * a chunk.
  */
-class RootComponent(fullProps : Props<Unit>)
-    : Component<Unit /* Takes effectively no props */, HtmlBlockTag /* Can be added under any block tag */>(fullProps) {
+class RootComponent : Component<Unit /* Takes effectively no props */>() {
+    var rootRerenders by observable(0)
     //This is the syntax for an observable piece of per-component state.
     //When it's reassigned, this component is marked as dirty and will be redrawn.
     var todo by observable(emptyList<String>())
@@ -100,32 +100,57 @@ class RootComponent(fullProps : Props<Unit>)
     override fun HtmlBlockTag.render() {
         div {
             newBackgroundColorOnRerender()
-            div {
+
+            h1 {
                 +"Welcome to Shade!"
-                //We can add subcomponents anywhere
-                add(SubComponent::class, Unit)
             }
-
+            h2 {
+                +"Basic subcomponent"
+            }
             div {
-                //All standard kotlin logic is supported. Render however makes sense to you.
-                todo.forEach {
-                    add(TodoComponent::class, it)
+
+                //We can add subcomponents anywhere.
+                //This one takes no props.
+                add(SubComponent::class)
+
+                button {
+                    onClick { rootRerenders += 1 }
+                    +"Rerender root (${rootRerenders})"
                 }
             }
 
-            input {
-                type = InputType.text
-                //We directly bind the input's value to serverside state.
-                onValueChange {
-                    newTaskName = it
+            render { //Anonymous component/render block
+                div {
+                    newBackgroundColorOnRerender()
+                    h2 {
+                        +"List of TODO components"
+                    }
+
+                    div {
+                        //All standard kotlin logic is supported. Render however makes sense to you.
+                        todo.forEach {
+                            add(TodoComponent::class, it)
+                        }
+                    }
+
+                    input {
+                        type = InputType.text
+                        //Here we directly one-way bind the input's value to serverside state.
+                        onValueChange {
+                            newTaskName = it
+                        }
+                    }
+                    button {
+                        onClick {
+                            todo = todo + newTaskName
+                        }
+                        +"New!"
+                    }
                 }
             }
-            button {
-                onClick {
-                    todo = todo + newTaskName
-                }
-                +"New!"
-            }
+
+
+            h2 { +"A simple counter" }
             div {
                 button {
                     onClick {
@@ -135,23 +160,31 @@ class RootComponent(fullProps : Props<Unit>)
                 }
             }
             div {
-                +"The counter is: "
-                //This is an example of passing a prop that changes
-                add(SubComponentShowingCounter::class, counter)
+                +"This subcomponent takes the counter as a prop, and outputs it: "
+                //This is an example of passing a prop that changes.
+                //It's also an example of using the related props class to specify the component.
+                add(SubComponentShowingCounter.Props(counter = counter))
             }
+
+            h2 { +"Components restricted to certain tags" }
             table {
                 tbody {
                     //Here we add two table row components, which can only be added inside of a TBODY because their
-                    //component type is Component<..., TBODY>
+                    //component type is ComponentInTag<..., TBODY>
                     add(TableRowComponent::class, 3)
                     add(TableRowComponent::class, 4)
                 }
             }
 
-            //Share some state between two components
+            h2 {
+                +"These two components share state"
+            }
+            div { +"This one reads it:" }
             add(SharedStateRender::class, sharedState)
+            div { +"This one modifies it:" }
             add(SharedStateInput::class, sharedState)
 
+            h2 { +"Error collection and coroutines" }
             button{
                 onClick {
                     //We can execute JS as necessary in our action handlers.
@@ -184,9 +217,29 @@ class RootComponent(fullProps : Props<Unit>)
                 +"Launch a long-running coroutine"
             }
 
-            add(KeyRerenderTest::class, Unit)
+            h2 { +"Rerendering" }
+            add(KeyRerenderTest::class)
 
-            add(ApplyJsTest::class, Unit)
+            h2 { +"JS application" }
+            add(ApplyJsTest::class)
+
+            h2 { +"Demo settings" }
+            div {
+                //Input delay compensation can route user inputs from a past render to the current one, so long as
+                //those inputs happened on the same place in this component's render tree.
+                //Otherwise, old inputs will be lost if a rerender removes the element they were applicable to.
+                +"Simulate extra delay (ms): "
+                input(type = InputType.number){
+                    min = "0"
+                    max = "10000"
+                    value = "0"
+                    onValueChange {
+                        val delay = it.toLong()
+                        //Halve the delay (it's a round trip)
+                        context.root.simulateExtraDelay = if(delay == 0L) null else Duration.of(delay/2, ChronoUnit.MILLIS)
+                    }
+                }
+            }
         }
     }
 
@@ -194,7 +247,7 @@ class RootComponent(fullProps : Props<Unit>)
         //The mounted() lifecycle function allows you to e.g. run JS expressions when the component is mounted
         launch {
             val result = context.runPromise("new Promise(function(resolve, reject){ setTimeout(function(){ resolve('foo') }, 3000)})").await()
-            println("Got: $result")
+            println("Component-mounted callback complete. Got: $result")
         }
     }
 }
@@ -209,7 +262,7 @@ fun DIV.newBackgroundColorOnRerender(){
 }
 
 
-class TodoComponent(props : Props<String>) : Component<String, HtmlBlockTag>(props){
+class TodoComponent : Component<String>() {
     override fun HtmlBlockTag.render() {
         div {
             newBackgroundColorOnRerender()
@@ -218,7 +271,7 @@ class TodoComponent(props : Props<String>) : Component<String, HtmlBlockTag>(pro
     }
 }
 
-class SubComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) {
+class SubComponent : Component<Unit>() {
     override fun HtmlBlockTag.render() {
         div {
             newBackgroundColorOnRerender()
@@ -227,16 +280,17 @@ class SubComponent(props : Props<Unit>) : Component<Unit, HtmlBlockTag>(props) {
     }
 }
 
-private class SubComponentShowingCounter(props : Props<ClientObservableState<Int>>) : Component<ClientObservableState<Int>, HtmlBlockTag>(props) {
+private class SubComponentShowingCounter : Component<SubComponentShowingCounter.Props>() {
+    data class Props (val counter : ClientObservableState<Int>) : PropsType<Props, SubComponentShowingCounter>()
     override fun HtmlBlockTag.render() {
         div {
             newBackgroundColorOnRerender()
-            +"Counter is $props ✓"
+            +"Counter is ${props.counter} ✓"
         }
     }
 }
 
-class TableRowComponent(props : Props<Int>) : Component<Int, TBODY>(props) {
+class TableRowComponent : ComponentInTag<Int, TBODY>() {
     override fun TBODY.render() {
         tr {
             td {
@@ -253,13 +307,13 @@ class TableRowComponent(props : Props<Int>) : Component<Int, TBODY>(props) {
     }
 }
 
-class SharedStateRender(props : Props<RootComponent.SharedRootState>) : Component<RootComponent.SharedRootState, HtmlBlockTag>(props){
+class SharedStateRender : Component<RootComponent.SharedRootState>(){
     override fun HtmlBlockTag.render() {
         +"You entered: ${props.text}"
     }
 }
 
-class SharedStateInput(props : Props<RootComponent.SharedRootState>) : Component<RootComponent.SharedRootState, HtmlBlockTag>(props){
+class SharedStateInput : Component<RootComponent.SharedRootState>(){
     override fun HtmlBlockTag.render() {
         div {
             input {
@@ -276,7 +330,7 @@ class SharedStateInput(props : Props<RootComponent.SharedRootState>) : Component
  * Like React, keys are used to distinguish between components added in arrays or foreach loops,
  * which might retain an identity but change their number or positioning.
  */
-class KeyRerenderTest(fullProps : Props<Unit>) : Component<Unit, HtmlBlockTag>(fullProps) {
+class KeyRerenderTest : Component<Unit>() {
     var numbersList by observable((0 until 10).toList())
     override fun HtmlBlockTag.render() {
         style {
@@ -296,42 +350,56 @@ class KeyRerenderTest(fullProps : Props<Unit>) : Component<Unit, HtmlBlockTag>(f
                 }
             """.trimIndent()) }
         }
+
         div {
-            numbersList.forEach {
-                div(classes = "flashNumber") {
-                    //We can give DOM elements keys
-                    key = it.toString()
-                    +"I am $it"
-                }
-                if(it.rem(2) == 0){
+            +"This test should flash only components that move. 4 should never change."
+        }
+        div {
+            withStyle {
+                display = Display.flex
+            }
+            div {
+                numbersList.forEach {
                     div(classes = "flashNumber") {
-                        +"($it is even)"
+                        //We can give DOM elements keys
+                        key = it.toString()
+                        +"DOM $it"
+                    }
+                    if(it.rem(2) == 0){
+                        span(classes = "flashNumber") {
+                            +"($it is even)"
+                        }
                     }
                 }
             }
-            numbersList.forEach {
-                add(KeyRerenderTestShow::class, it, key = it.toString())
-                if(it.rem(2) == 0){
-                    div(classes = "flashNumber") {
-                        +"($it is even)"
+            div {
+                numbersList.forEach {
+                    add(KeyRerenderTestShow::class, it, key = it.toString())
+                    if(it.rem(2) == 0){
+                        span(classes = "flashNumber") {
+                            +"($it is even)"
+                        }
                     }
                 }
             }
         }
         button {
             onClick {
-                numbersList = numbersList.sortedBy { Math.random() }
+                val sort = numbersList.sortedBy { Math.random() }.toMutableList()
+                sort[sort.indexOf(4)] = sort[4]
+                sort[4] = 4
+                numbersList = sort
             }
             +"Shuffle list"
         }
     }
 }
 
-class KeyRerenderTestShow(fullProps : Props<Int>) : Component<Int, HtmlBlockTag>(fullProps){
+class KeyRerenderTestShow : Component<Int>() {
     override fun HtmlBlockTag.render() {
         div(classes = "flashNumber") {
             newBackgroundColorOnRerender()
-            +"I am component $props"
+            +"Component $props"
         }
     }
 }
@@ -340,7 +408,7 @@ class KeyRerenderTestShow(fullProps : Props<Int>) : Component<Int, HtmlBlockTag>
  * Using applyJs() we can specify JS to be executed when a DOM element is created, but not on subsequent rerenders.
  * This component uses this wrongly to change DOM, which can be overridden on a rerender.
  */
-class ApplyJsTest(fullProps : Props<Unit>) : Component<Unit, HtmlBlockTag>(fullProps){
+class ApplyJsTest : Component<Unit>(){
     var unchanged by observable(0)
     var counter by observable(0)
     override fun HtmlBlockTag.render() {
@@ -363,8 +431,9 @@ class ApplyJsTest(fullProps : Props<Unit>) : Component<Unit, HtmlBlockTag>(fullP
 }
 
 //This code is used in the README, and is replicated here to make sure it compiles.
-data class TodoListProps(val userName : String)
-class TodoList(fullProps : Props<TodoListProps>) : Component<TodoListProps, HtmlBlockTag>(fullProps) {
+class TodoList : Component<TodoList.Props>() {
+    data class Props(val userName : String) : PropsType<Props, TodoList>()
+
     var todoList by observable(listOf<String>())
     var newItem by observable("")
     override fun HtmlBlockTag.render(){

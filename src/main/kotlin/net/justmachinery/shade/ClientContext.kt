@@ -25,12 +25,12 @@ class ClientContext(val clientId : UUID, val root : ShadeRoot) {
     /**
      * We track the currently rendering component so that we can implicitly add its dependencies
      */
-    private var currentlyRenderingComponent : Component<*,*>? = null
+    private var currentlyRenderingComponent : AdvancedComponent<*,*>? = null
     fun getCurrentlyRenderingComponent() = currentlyRenderingComponent
     /**
      * Properly set and reset the currently rendering component around cb
      */
-    internal fun withComponentRendering(component : Component<*,*>, cb : ()->Unit){
+    internal fun withComponentRendering(component : AdvancedComponent<*,*>, cb : ()->Unit){
         val old = currentlyRenderingComponent
         currentlyRenderingComponent = component
         try {
@@ -43,16 +43,16 @@ class ClientContext(val clientId : UUID, val root : ShadeRoot) {
     /**
      * Set of components known to be dirty and require rerendering
      */
-    private val needReRender = Collections.synchronizedSet(mutableSetOf<Component<*,*>>())
+    private val needReRender = Collections.synchronizedSet(mutableSetOf<AdvancedComponent<*,*>>())
     /**
      * Used to avoid excessive rerender of a component when doing batched rendering, as its parent may rerender it.
      */
-    internal var hasReRendered: MutableSet<Component<*,*>>? = null
+    internal var hasReRendered: MutableSet<AdvancedComponent<*,*>>? = null
 
     /**
      * Flag components dirty, and queue a rerender
      */
-    internal fun setComponentsDirty(components : List<Component<*,*>>) = logging {
+    internal fun setComponentsDirty(components : List<AdvancedComponent<*,*>>) = logging {
         logger.debug { "Set dirty: ${components.joinToString(",")}" }
         needReRender.addAll(components)
         triggerReRender()
@@ -71,7 +71,7 @@ class ClientContext(val clientId : UUID, val root : ShadeRoot) {
     /**
      * Render a root component
      */
-    internal fun <RenderIn : Tag> renderRoot(builder : RenderIn, component : Component<*, RenderIn>) = logging {
+    internal fun <RenderIn : Tag> renderRoot(builder : RenderIn, component : AdvancedComponent<*, RenderIn>) = logging {
         logger.debug { "Rendering root $component" }
         synchronized(renderLock){
             renderingThread = Thread.currentThread()
@@ -93,7 +93,7 @@ class ClientContext(val clientId : UUID, val root : ShadeRoot) {
         if(batchReRenders.get() == 0){
             synchronized(renderLock){
                 renderingThread = Thread.currentThread()
-                val rerendered = mutableSetOf<Component<*,*>>()
+                val rerendered = mutableSetOf<AdvancedComponent<*,*>>()
                 hasReRendered = rerendered
                 try {
                     //We render from the top of the tree hierarchy down, to avoid excessive rerenders when a parent and
@@ -107,7 +107,7 @@ class ClientContext(val clientId : UUID, val root : ShadeRoot) {
                     ordered.forEach {
                         if(!rerendered.contains(it)){
                             @Suppress("UNCHECKED_CAST")
-                            (it as Component<*, Tag>).updateRender(it.renderIn)
+                            (it as AdvancedComponent<*, Tag>).updateRender(it.renderIn)
                         }
                     }
                 } finally {
@@ -121,9 +121,11 @@ class ClientContext(val clientId : UUID, val root : ShadeRoot) {
     private val batchReRenders = AtomicInteger(0)
     private suspend fun batchingReRenders(cb: suspend ()->Unit){
         try {
+            logger.trace { "Batching rerenders..." }
             batchReRenders.incrementAndGet()
             cb()
         } finally {
+            logger.trace { "Finished a rerender batch." }
             batchReRenders.decrementAndGet()
         }
         triggerReRender()
@@ -134,11 +136,11 @@ class ClientContext(val clientId : UUID, val root : ShadeRoot) {
     /**
      * This is used to make processing of user events sequential
      */
-    private var eventProcessing = false
+    @Volatile private var eventProcessing = false
     private val eventQueue : Queue<Pair<suspend (Json?) -> Unit, Json?>> = ArrayDeque()
 
     private val supervisor = SupervisorJob()
-    internal var coroutineScope = CoroutineScope(supervisor)
+    internal val coroutineScope = CoroutineScope(supervisor)
 
     internal fun cleanup(){
         GlobalScope.launch {
@@ -212,11 +214,12 @@ class ClientContext(val clientId : UUID, val root : ShadeRoot) {
         }
     }
 
-    private suspend fun runEventLockedCallback(callback: suspend (Json?) -> Unit, data: Json?){
+    internal suspend fun runEventLockedCallback(callback: suspend (Json?) -> Unit, data: Json?){
         var currentCallback = callback
         var currentData = data
         while(true){
             try {
+                logger.trace { "Running a callback" }
                 currentCallback(currentData)
             } catch(t : Throwable){
                 if(t is CancellationException){
@@ -224,22 +227,22 @@ class ClientContext(val clientId : UUID, val root : ShadeRoot) {
                 } else {
                     logger.error(t) { "Error processing event callback" }
                 }
+            } finally {
+                logger.trace { "Callback done" }
             }
+            logger.trace { "Checking event queue" }
 
-            val cb = synchronized(eventQueue){
+            synchronized(eventQueue){
                 if(eventQueue.isNotEmpty()){
-                    eventQueue.poll()
+                    logger.trace { "Found a callback" }
+                    val cb = eventQueue.poll()
+                    currentCallback = cb.first
+                    currentData = cb.second
                 } else {
+                    logger.trace { "No callback; disable event processing" }
                     eventProcessing = false
-                    null
+                    return
                 }
-            }
-
-            if(cb != null){
-                currentCallback = cb.first
-                currentData = cb.second
-            } else {
-                break
             }
         }
 
@@ -260,8 +263,8 @@ class ClientContext(val clientId : UUID, val root : ShadeRoot) {
         logger.trace { "Cleanup callback $id" }
         storedCallbacks.remove(id)
     }
-    private fun storeCallback(data : CallbackData) : Long {
-        val id = nextCallbackId.incrementAndGet()
+    private fun storeCallback(data : CallbackData, forceId : Long? = null) : Long {
+        val id = forceId ?: nextCallbackId.incrementAndGet()
         logger.trace { "Create callback $id" }
         storedCallbacks[id] = data
         return id
@@ -300,11 +303,24 @@ class ClientContext(val clientId : UUID, val root : ShadeRoot) {
         @Language("JavaScript 1.8") data : String? = null,
         cb : suspend (Json?)->Unit
     ) : Pair<Long, String> {
-        val id = storeCallback(CallbackData(
-            callback = cb,
-            onError = null,
-            requireEventLock = true
-        ))
+        return eventCallbackStringInternal(prefix = prefix, suffix = suffix, data = data, forceId = null, cb = cb)
+    }
+
+    internal fun eventCallbackStringInternal(
+        @Language("JavaScript 1.8") prefix : String = "",
+        @Language("JavaScript 1.8") suffix : String = "",
+        @Language("JavaScript 1.8") data : String? = null,
+        forceId: Long? = null,
+        cb : suspend (Json?)->Unit
+    ) : Pair<Long, String> {
+        val id = storeCallback(
+            CallbackData(
+                callback = cb,
+                onError = null,
+                requireEventLock = true
+            ),
+            forceId = forceId
+        )
         val wrappedPrefix = if(prefix.isNotBlank()) "$prefix;" else ""
         val wrappedSuffix = if(suffix.isNotBlank()) ";$suffix" else ""
         val wrappedData = if(data != null) ",JSON.stringify($data)" else ""

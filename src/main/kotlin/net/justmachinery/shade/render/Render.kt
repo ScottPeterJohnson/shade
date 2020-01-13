@@ -1,12 +1,15 @@
 package net.justmachinery.shade.render
 
+import com.google.common.collect.BiMap
+import com.google.common.collect.HashBiMap
+import com.google.common.collect.Sets
 import kotlinx.html.SCRIPT
 import kotlinx.html.Tag
 import kotlinx.html.TagConsumer
 import kotlinx.html.stream.appendHTML
 import kotlinx.html.visit
-import net.justmachinery.shade.Component
-import net.justmachinery.shade.Props
+import net.justmachinery.shade.AdvancedComponent
+import net.justmachinery.shade.ComponentInitData
 import org.apache.commons.text.StringEscapeUtils
 import java.io.ByteArrayOutputStream
 import java.util.*
@@ -16,15 +19,14 @@ internal data class ComponentRenderState(
     val componentId : UUID = UUID.randomUUID(),
     var renderTreeRoot : RenderTreeLocation? = null,
     var location : RenderTreeLocationFrame? = null,
-    val lastRenderCallbackIds : MutableList<Long> = mutableListOf()
+    var lastRenderCallbackIds : SortedSet<Long> = sortedSetOf(),
+    var renderTreePathToCallbackId : BiMap<Pair<RenderTreeTagLocation, String>, Long> = HashBiMap.create(0)
 )
 
-internal fun <RenderIn : Tag> Component<*, RenderIn>.renderInternal(tag : RenderIn, addMarkers : Boolean){
-    renderState.lastRenderCallbackIds.forEach {
-        context.removeCallback(it)
-    }
+internal fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.renderInternal(tag : RenderIn, addMarkers : Boolean){
+    val oldRenderCallbackIds = renderState.lastRenderCallbackIds
+    renderState.lastRenderCallbackIds = TreeSet()
     context.hasReRendered?.add(this)
-    renderState.lastRenderCallbackIds.clear()
     context.withComponentRendering(this){
         if(addMarkers) SCRIPT(listOfNotNull(
             "type" to "shade",
@@ -47,9 +49,14 @@ internal fun <RenderIn : Tag> Component<*, RenderIn>.renderInternal(tag : Render
             "id" to renderState.componentId.toString() + "-end"
         ), tag.consumer).visit {}
     }
+
+    Sets.difference(oldRenderCallbackIds, renderState.lastRenderCallbackIds).forEach {
+        context.removeCallback(it)
+        renderState.renderTreePathToCallbackId.inverse().remove(it)
+    }
 }
 
-internal fun <RenderIn : Tag> Component<*, RenderIn>.updateRender(clazz : KClass<out RenderIn>){
+internal fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.updateRender(clazz : KClass<out RenderIn>){
     val html = ByteArrayOutputStream().let { baos ->
         baos.writer().buffered().use {
             val consumer = it.appendHTML(prettyPrint = false)
@@ -67,9 +74,9 @@ internal fun <RenderIn : Tag> Component<*, RenderIn>.updateRender(clazz : KClass
 
 
 fun <T : Any, RenderIn : Tag> addComponent(
-    parent : Component<*, *>,
+    parent : AdvancedComponent<*, *>,
     block : RenderIn,
-    component : KClass<out Component<T, RenderIn>>,
+    component : KClass<out AdvancedComponent<T, RenderIn>>,
     renderIn : KClass<out Tag>,
     props : T,
     key : String? = null
@@ -107,12 +114,12 @@ private enum class GetComponentResult {
 }
 
 private fun <T : Any, RenderIn : Tag> getOrConstructComponent(
-    parent : Component<*, *>,
-    component : KClass<out Component<T, RenderIn>>,
+    parent : AdvancedComponent<*, *>,
+    component : KClass<out AdvancedComponent<T, RenderIn>>,
     renderIn : KClass<out Tag>,
     props : T,
     key : String? = null
-) : Pair<GetComponentResult, Component<T, RenderIn>> {
+) : Pair<GetComponentResult, AdvancedComponent<T, RenderIn>> {
     parent.renderState.location?.let { frame ->
         val oldComponent = if(key != null){
             frame.oldRenderTreeLocation?.children?.firstOrNull { it is RenderTreeChild.ComponentChild && it.component.key == key }
@@ -121,7 +128,7 @@ private fun <T : Any, RenderIn : Tag> getOrConstructComponent(
         }
         if(oldComponent is RenderTreeChild.ComponentChild && oldComponent.component.kClass == component){
             @Suppress("UNCHECKED_CAST")
-            (oldComponent.component as Component<T, RenderIn>)
+            (oldComponent.component as AdvancedComponent<T, RenderIn>)
             return if(oldComponent.component.props == props){
                 GetComponentResult.EXISTING_KEEP to oldComponent.component
             } else {
@@ -132,7 +139,7 @@ private fun <T : Any, RenderIn : Tag> getOrConstructComponent(
     }
     return GetComponentResult.NEW to parent.context.root.constructComponent(
         component,
-        Props(
+        ComponentInitData(
             context = parent.context,
             props = props,
             key = key,

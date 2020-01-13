@@ -6,8 +6,12 @@ import kotlinx.html.Tag
 import kotlinx.html.script
 import kotlinx.html.unsafe
 import mu.KLogging
+import java.time.Duration
 import java.util.*
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.reflect.KClass
+import kotlin.reflect.full.isSubclassOf
 
 
 class ShadeRoot(
@@ -22,26 +26,47 @@ class ShadeRoot(
     /**
      * This is called after a component is constructed, and could be used to e.g. inject dependencies.
      */
-    val afterConstructComponent : (Component<*,*>)->Unit = {},
+    val afterConstructComponent : (AdvancedComponent<*,*>)->Unit = {},
     /**
      * Called whenever an exception is thrown in a client's JS page that cannot be mapped to a deferred
      */
     val onUncaughtJavascriptException : (ClientContext, JavascriptException)->Unit = { context, err ->
         logger.error(err){ "Uncaught JS exception for client ${context.clientId}" }
-    }
+    },
+    /**
+     * For testing purposes.
+     * An extra delay to add before passing receiving or sending any messages to the client, to simulate poor connections.
+     */
+    var simulateExtraDelay : Duration? = null
 ) {
     companion object : KLogging() {
         private val shadeScript = ClassLoader.getSystemClassLoader().getResource("shade.js")!!.readText()
     }
 
-    fun <T : Any, RenderIn : Tag> constructComponent(clazz : KClass<out Component<T, RenderIn>>, props : Props<T>) : Component<T, RenderIn> {
-        val component = clazz.java.getDeclaredConstructor(Props::class.java).also { it.isAccessible = true }.newInstance(props)!!
+    fun <T : Any, RenderIn : Tag> constructComponent(clazz : KClass<out AdvancedComponent<T, RenderIn>>, props : ComponentInitData<T>) : AdvancedComponent<T, RenderIn> {
+        val component = when {
+            clazz == FunctionComponent::class -> {
+                @Suppress("UNCHECKED_CAST")
+                FunctionComponent(props as ComponentInitData<RenderFunction<RenderIn>>) as AdvancedComponent<T, RenderIn>
+            }
+            clazz.isSubclassOf(Component::class) || clazz.isSubclassOf(ComponentInTag::class) -> {
+                try {
+                    componentPassProps.set(props)
+                    clazz.java.getDeclaredConstructor().also { it.isAccessible = true }.newInstance()
+                } finally {
+                    componentPassProps.remove()
+                }
+            }
+            else -> {
+                clazz.java.getDeclaredConstructor(ComponentInitData::class.java).also { it.isAccessible = true }.newInstance(props)
+            }
+        }!!
         afterConstructComponent(component)
         return component
     }
 
-    fun <T : Any, RenderIn : Tag> component(context : ClientContext, builder : RenderIn, root : KClass<out Component<T, RenderIn>>, props : T){
-        val propObj = Props(
+    fun <T : Any, RenderIn : Tag> component(context : ClientContext, builder : RenderIn, root : KClass<out AdvancedComponent<T, RenderIn>>, props : T){
+        val propObj = ComponentInitData(
             context = context,
             key = null,
             props = props,
@@ -87,11 +112,17 @@ class ShadeRoot(
         private val send : (String)->Unit,
         private val disconnect : ()->Unit
     ) {
-        private var clientId : UUID? = null
+        var clientId : UUID? = null
         private var clientData : ClientContext? = null
 
         internal fun sendMessage(errorTag : String?, message : String){
-            send("${errorTag ?: ""}|$message")
+            if (simulateExtraDelay == null) {
+                send("${errorTag ?: ""}|$message")
+            } else {
+                delayExecutor.schedule({
+                    send("${errorTag ?: ""}|$message")
+                }, simulateExtraDelay!!.toMillis(), TimeUnit.MILLISECONDS)
+            }
         }
         /**
          * This should be called by your web framework when a websocket receives a message.
@@ -99,6 +130,16 @@ class ShadeRoot(
          */
         fun onMessage(message : String){
             if(message.isEmpty()) return
+            if (simulateExtraDelay == null) {
+                processMessage(message)
+            } else {
+                delayExecutor.schedule({
+                    processMessage(message)
+                }, simulateExtraDelay!!.toMillis(), TimeUnit.MILLISECONDS)
+            }
+        }
+
+        private fun processMessage(message : String){
             synchronized(this){
                 withLoggingInfo("shadeClientId" to clientId.toString()){
                     logger.trace { "Message received: ${message.ellipsizeAfter(200)}" }
@@ -144,5 +185,7 @@ class ShadeRoot(
                 }
             }
         }
+
+        private val delayExecutor by lazy { Executors.newSingleThreadScheduledExecutor() }
     }
 }

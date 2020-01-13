@@ -15,10 +15,11 @@ user actions and server-side responses
 ## A Quick Sample
 This example shows a simple TODO list component:
 ```kotlin
-data class TodoListProps(val userName : String)
-class TodoList(fullProps : Props<TodoListProps>) : Component<TodoListProps, HtmlBlockTag>(fullProps) {
+class TodoList : Component<TodoList.Props>() {
+    data class Props(val userName : String) : PropsType<Props, TodoList>
+
     var todoList by observable(listOf<String>())
-    var newItem = ""
+    var newItem by observable("")
     override fun HtmlBlockTag.render(){
         p {
             +"Hello, "
@@ -51,6 +52,11 @@ class TodoList(fullProps : Props<TodoListProps>) : Component<TodoListProps, Html
 }
 ```
 Whenever either the user name or the items in the todoList change, the view will update itself on the client.
+
+It can be added from another component by simply calling:
+```kotlin
+add(TodoList.Props(userName = "Foo"))
+```
 
 ## Cost/Benefit
 While for developers this is a much better way to work, server-driven web pages aren't a free lunch. Consider your use case closely. Note that some of these tradeoffs will change as the framework
