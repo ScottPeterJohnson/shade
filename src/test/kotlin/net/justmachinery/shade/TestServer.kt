@@ -89,10 +89,10 @@ class RootComponent : Component<Unit /* Takes effectively no props */>() {
     var counter = observable(0)
 
     //We can also package state up in an observable wrapper class and pass it between components.
-    inner class SharedRootState(context : ClientContext) : StateContainer(context){
-        var text by observable("")
+    inner class SharedRootState {
+        var text by react("")
     }
-    val sharedState = SharedRootState(context)
+    val sharedState = SharedRootState()
 
     var newTaskName : String = ""
 
@@ -211,8 +211,14 @@ class RootComponent : Component<Unit /* Takes effectively no props */>() {
             }
             button{
                 onClick {
-                    //Since handlers run in coroutines, they can delay without consuming a thread
-                    delay(100 * 1000 * 1000)
+                    //Since handlers run in coroutines, they can delay without consuming a thread.
+                    //However, this would block subsequent rendering for the client:
+                    //delay(100 * 1000 * 1000)
+                    //As only one user-event can be processed at a time.
+                    //Instead, we can launch a new coroutine:
+                    launch {
+                        delay(100 * 1000 * 1000)
+                    }
                 }
                 +"Launch a long-running coroutine"
             }
@@ -222,6 +228,9 @@ class RootComponent : Component<Unit /* Takes effectively no props */>() {
 
             h2 { +"JS application" }
             add(ApplyJsTest::class)
+
+            h2 { +"Computed State" }
+            add(ComputedState::class)
 
             h2 { +"Demo settings" }
             div {
@@ -281,11 +290,11 @@ class SubComponent : Component<Unit>() {
 }
 
 private class SubComponentShowingCounter : Component<SubComponentShowingCounter.Props>() {
-    data class Props (val counter : ClientObservableState<Int>) : PropsType<Props, SubComponentShowingCounter>()
+    data class Props (val counter : ObservableValue<Int>) : PropsType<Props, SubComponentShowingCounter>()
     override fun HtmlBlockTag.render() {
         div {
             newBackgroundColorOnRerender()
-            +"Counter is ${props.counter} ✓"
+            +"Counter is ${props.counter.value} ✓"
         }
     }
 }
@@ -426,6 +435,43 @@ class ApplyJsTest : Component<Unit>(){
                 counter += 1
             }
             +"Click to rerender w/ changing JS ($counter)"
+        }
+    }
+}
+
+class ComputedState : Component<Unit>() {
+    var firstNumber by react(5)
+    var secondNumber by react(10)
+    val sum by computed { firstNumber + secondNumber }
+    override fun HtmlBlockTag.render() {
+        div {
+            render {
+                div {
+                    newBackgroundColorOnRerender()
+                    input(type = InputType.number){
+                        value = firstNumber.toString()
+                        onValueInput { firstNumber = it.toIntOrNull() ?: 0 }
+                    }
+
+                }
+            }
+            +" + "
+            render {
+                div {
+                    newBackgroundColorOnRerender()
+                    input(type = InputType.number) {
+                        value = secondNumber.toString()
+                        onValueInput { secondNumber = it.toIntOrNull() ?: 0 }
+                    }
+                }
+            }
+            +" = "
+            render {
+                div {
+                    newBackgroundColorOnRerender()
+                    +(sum.toString())
+                }
+            }
         }
     }
 }

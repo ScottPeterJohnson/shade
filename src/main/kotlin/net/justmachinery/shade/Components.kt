@@ -3,7 +3,11 @@ package net.justmachinery.shade
 import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.html.*
-import net.justmachinery.shade.render.*
+import mu.KLogging
+import net.justmachinery.shade.render.ComponentRenderState
+import net.justmachinery.shade.render.RenderTreeRecorderConsumer
+import net.justmachinery.shade.render.addComponent
+import net.justmachinery.shade.render.toRenderTreeTagLocation
 import java.lang.reflect.ParameterizedType
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.KClass
@@ -13,7 +17,6 @@ class ComponentInitData<T : Any>(
     val context : ClientContext,
     val props : T,
     val key : String? = null,
-    val kClass : KClass<out AdvancedComponent<T, *>>,
     val renderIn : KClass<out Tag>,
     val treeDepth : Int
 )
@@ -45,9 +48,17 @@ abstract class ComponentInTag<PropType : Any, RenderIn : Tag> :
     AdvancedComponent<PropType, RenderIn>(componentPassProps.get() as ComponentInitData<PropType>) {}
 
 typealias RenderFunction<RenderIn> = RenderIn.()->Unit
-class FunctionComponent<RenderIn : Tag>(fullProps : ComponentInitData<RenderFunction<RenderIn>>) : AdvancedComponent<RenderFunction<RenderIn>, RenderIn>(fullProps){
+class FunctionComponent<RenderIn : Tag>(fullProps : ComponentInitData<Props<RenderIn>>) : AdvancedComponent<FunctionComponent.Props<RenderIn>, RenderIn>(fullProps){
+    data class Props<RenderIn : Tag>(val cb : RenderIn.()->Unit, val parent : AdvancedComponent<*,*>)
     override fun RenderIn.render() {
-        props()
+        val parent = props.parent
+        val cb = props.cb
+        try {
+            parent.renderState.renderingFunction = this@FunctionComponent
+            cb()
+        } finally {
+            parent.renderState.renderingFunction = null
+        }
     }
 }
 
@@ -57,16 +68,25 @@ class FunctionComponent<RenderIn : Tag>(fullProps : ComponentInitData<RenderFunc
  * This is exposed in case you need that.
  */
 abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : ComponentInitData<PropType>) : CoroutineScope by fullProps.context.coroutineScope {
-    var props = fullProps.props
+    companion object : KLogging()
+
+    var _props : PropType? = null
+    var props
+        get() = _props ?: throw IllegalStateException("""
+            Illegal props access, probably from a constructor, e.g. "val foo = props.bar". This is not allowed 
+            because props may change on subsequent rerenders, while the component remains. Try a lazy getter instead,
+            e.g. "val foo get() = props.bar"
+        """.trimIndent())
+        internal set(value) { _props = value }
     val context = fullProps.context
-    val key = fullProps.key
-    val kClass = fullProps.kClass
-    val renderIn = fullProps.renderIn
+    internal val key = fullProps.key
+    internal val renderIn = fullProps.renderIn
     internal val treeDepth = fullProps.treeDepth
 
-    internal val renderState = ComponentRenderState()
+    //This is just state moved to another file for clarity
+    internal val renderState = ComponentRenderState(context.nextComponentId())
     @Suppress("LeakingThis")
-    internal val ref = ComponentReference(this)
+    internal val renderDependencies = Render(this)
 
     /**
      * Main function to implement. This will be called whenever any observable state used in it changes.
@@ -77,23 +97,63 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
     open fun mounted(){}
     open fun unmounted(){}
 
-    internal fun doUnmount(){
-        ref.component = null
-        unmounted()
-    }
     /**
-     * Allows a component to catch errors.
-     * If true, error has been handled by this component.
+     * Allows a component to catch errors generated during render, mount, or unmount.
+     * If true, error has been handled by this component and will not be logged by Shade.
+     * If false, render errors will propagate upwards through the component tree.
+     * Note that a partial render will still complete for this component.
      */
-    open fun onCatch(throwable: Throwable) : Boolean = false
+    open fun onCatch(exception: ComponentException) : Boolean = false
+
+    internal fun RenderIn.doRender(){
+        maybeHandleExceptions(message = { "While rendering" }){
+            render()
+        }
+    }
+    internal fun doMount(){
+        context.swallowExceptions {
+            maybeHandleExceptions(message = { "While mounting" }){
+                mounted()
+            }
+        }
+    }
+    internal fun doUnmount(){
+        renderDependencies.dispose()
+        context.swallowExceptions {
+            maybeHandleExceptions(message = { "While unmounting" }){
+                unmounted()
+            }
+        }
+    }
+
+    private fun <T> maybeHandleExceptions(message : ()->String, cb : ()->T) : T? {
+        return try {
+            cb()
+        } catch(t : Throwable){
+            val msg = try {
+                message()
+            } catch(t2 : Throwable){
+                t.addSuppressed(t2)
+                "(Unable to generate additional context message)"
+            }
+            val err = ComponentException(component = this, message = msg, cause = t)
+            if (!onCatch(err)) {
+                throw t
+            }
+            null
+        }
+    }
+
+    //This allows for the render() function to work despite there being no ergonomic way to have both a fresh RenderIn tag and
+    //a fresh component receiver for the passed-in function.
+    private fun realComponentThis() = this.renderState.renderingFunction ?: this
+
 
     //Useful helper functions and aliases
-    fun <T> observable(initial : T) = ClientObservableState(context, initial)
-
     fun <Props : PropsType<Props, T>, T : AdvancedComponent<Props, RenderIn>, RenderIn : Tag> RenderIn.add(pr : Props, key : String? = null) =
         @Suppress("UNCHECKED_CAST")
         addComponent(
-            parent = this@AdvancedComponent,
+            parent = realComponentThis(),
             block = this,
             component = pr.type,
             renderIn = this::class,
@@ -105,7 +165,7 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
     fun <Props : Any, RenderIn : Tag> RenderIn.add(component : KClass<out AdvancedComponent<Props, RenderIn>>, props : Props, key : String? = null) =
         @Suppress("UNCHECKED_CAST")
         addComponent(
-            parent = this@AdvancedComponent,
+            parent = realComponentThis(),
             block = this,
             component = component,
             renderIn = this::class,
@@ -113,9 +173,18 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
             key = key
         )
 
+    /**
+     * Renders a new block as if it were an anonymous subcomponent; i.e. it alone will rerender if its dependencies
+     * change.
+     * Note that the component context captured from the render function passed in will be wrong, but is hackily fixed
+     * for shade functions like e.g. onChange.
+     */
     fun <RenderIn : Tag> RenderIn.render(cb : RenderFunction<RenderIn>){
         @Suppress("UNCHECKED_CAST")
-        add(FunctionComponent::class as KClass<out AdvancedComponent<RenderFunction<RenderIn>, RenderIn>>, props = cb)
+        add(
+            FunctionComponent::class as KClass<FunctionComponent<RenderIn>>,
+            FunctionComponent.Props(cb = cb, parent = this@AdvancedComponent)
+        )
     }
 
     //Event CB helpers
@@ -129,10 +198,13 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
         //We want to use the same callback ID for callbacks that are attached to the same event listener on the same
         //DOM path in this component; this makes dealing with time delays where a client sends a valid event but Shade
         //updates much easier.
-        val pos = domPosition()
-        val old = renderState.renderTreePathToCallbackId[pos to eventName]
+        val cons = consumer as RenderTreeRecorderConsumer
+        val pos = cons.frameStack.peek().newRenderTreeLocation.toRenderTreeTagLocation()
 
-        val (id, js) = context.eventCallbackStringInternal(
+        val realThis = realComponentThis()
+        val old = realThis.renderState.renderTreePathToCallbackId[pos to eventName]
+
+        val (id, js) = realThis.context.eventCallbackStringInternal(
             prefix = prefix,
             suffix = suffix,
             data = data,
@@ -140,20 +212,11 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
             cb = cb
         )
         if(old == null){
-            renderState.renderTreePathToCallbackId[pos to eventName] = id
+            realThis.renderState.renderTreePathToCallbackId[pos to eventName] = id
         }
-        renderState.lastRenderCallbackIds.add(id)
+        realThis.renderState.lastRenderCallbackIds.add(id)
         return js
     }
-
-
-    private fun CommonAttributeGroupFacade.domPosition() : RenderTreeTagLocation {
-        val cons = this.consumer as RenderTreeRecorderConsumer
-        return cons.frameStack.peek().newRenderTreeLocation.toRenderTreeTagLocation()
-    }
-
-
-
 
 
     fun CommonAttributeGroupFacade.onValueChange(
@@ -251,5 +314,9 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
     fun CommonAttributeGroupFacade.onWheel(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onWheel = callbackString(eventName = "onWheel", prefix = prefix, suffix = suffix, data = data, cb = cb) }
 }
 
-//This allows for components to be unmounted and garbage collected while still retaining references in state
-internal data class ComponentReference(var component : AdvancedComponent<*,*>?)
+
+class ComponentException(
+    val component : AdvancedComponent<*,*>,
+    message : String,
+    cause : Throwable
+) : RuntimeException(message, cause)

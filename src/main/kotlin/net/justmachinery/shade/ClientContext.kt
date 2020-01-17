@@ -14,107 +14,94 @@ import java.util.concurrent.atomic.AtomicLong
 /**
  * Stores and manages state for a particular client connection.
  */
-class ClientContext(val clientId : UUID, val root : ShadeRoot) {
+class ClientContext(
+    /**
+     * Unique per-client identifier
+     */
+    val clientId : UUID,
+    val root : ShadeRoot
+) {
     companion object : KLogging()
+
     private inline fun <T> logging(cb: ()->T) : T {
         return withLoggingInfo("shadeClientId" to clientId.toString()){
             cb()
         }
     }
 
-    /**
-     * We track the currently rendering component so that we can implicitly add its dependencies
-     */
-    private var currentlyRenderingComponent : AdvancedComponent<*,*>? = null
-    fun getCurrentlyRenderingComponent() = currentlyRenderingComponent
-    /**
-     * Properly set and reset the currently rendering component around cb
-     */
-    internal fun withComponentRendering(component : AdvancedComponent<*,*>, cb : ()->Unit){
-        val old = currentlyRenderingComponent
-        currentlyRenderingComponent = component
-        try {
-            cb()
-        } finally {
-            currentlyRenderingComponent = old
-        }
-    }
+    private val nextComponentId = AtomicInteger(0)
+    fun nextComponentId() = nextComponentId.getAndIncrement()
 
     /**
      * Set of components known to be dirty and require rerendering
      */
-    private val needReRender = Collections.synchronizedSet(mutableSetOf<AdvancedComponent<*,*>>())
+    private val needRerender = Collections.synchronizedSet(mutableSetOf<AdvancedComponent<*,*>>())
     /**
      * Used to avoid excessive rerender of a component when doing batched rendering, as its parent may rerender it.
      */
-    internal var hasReRendered: MutableSet<AdvancedComponent<*,*>>? = null
+    private var alreadyRerendered: MutableSet<AdvancedComponent<*,*>>? = null
+    internal fun markAlreadyRerendered(component : AdvancedComponent<*, *>){ alreadyRerendered?.add(component) }
 
     /**
      * Flag components dirty, and queue a rerender
      */
     internal fun setComponentsDirty(components : List<AdvancedComponent<*,*>>) = logging {
         logger.debug { "Set dirty: ${components.joinToString(",")}" }
-        needReRender.addAll(components)
+        needRerender.addAll(components)
         triggerReRender()
     }
 
-    private val renderLock = Object()
-    private var renderingThread : Thread? = null
-
     /**
-     * Is this thread currently rendering for this client?
+     * Only one thread should be rendering for a client at a time.
      */
-    internal fun isRenderingThread() : Boolean {
-        return renderingThread == Thread.currentThread()
-    }
+    private val renderLock = Object()
 
     /**
-     * Render a root component
+     * Render a root component into an existing HTML builder.
      */
     internal fun <RenderIn : Tag> renderRoot(builder : RenderIn, component : AdvancedComponent<*, RenderIn>) = logging {
         logger.debug { "Rendering root $component" }
         synchronized(renderLock){
-            renderingThread = Thread.currentThread()
-            try {
-                component.run {
-                    renderInternal(builder, addMarkers = true)
-                }
-                component.mounted()
-            } finally {
-                renderingThread = null
+            component.context.swallowExceptions(message = { "While adding root" }) {
+                component.renderInternal(builder, addMarkers = true)
+                component.doMount()
             }
         }
     }
 
     /**
-     * Re-render dirty components
+     * Re-render dirty components and send their updates over websocket
      */
-    private fun triggerReRender() = logging {
-        if(batchReRenders.get() == 0){
-            synchronized(renderLock){
-                renderingThread = Thread.currentThread()
-                val rerendered = mutableSetOf<AdvancedComponent<*,*>>()
-                hasReRendered = rerendered
-                try {
-                    //We render from the top of the tree hierarchy down, to avoid excessive rerenders when a parent and
-                    //some child both depend on some state marked dirty.
-                    val ordered = synchronized(needReRender) {
-                        val result = needReRender.sortedBy { it.treeDepth }
-                        needReRender.clear()
-                        result
-                    }
-                    logger.debug { "Rerendering: ${ordered.joinToString(",")}" }
-                    ordered.forEach {
-                        if(!rerendered.contains(it)){
+    private fun rerender() = logging {
+        synchronized(renderLock){
+            val rerendered = mutableSetOf<AdvancedComponent<*,*>>()
+            alreadyRerendered = rerendered
+            try {
+                //We render from the top of the tree hierarchy down, to avoid excessive rerenders when a parent and
+                //some child both depend on some state marked dirty.
+                val ordered = synchronized(needRerender) {
+                    val result = needRerender.sortedBy { it.treeDepth }
+                    needRerender.clear()
+                    result
+                }
+                logger.debug { "Rerendering: ${ordered.joinToString(",")}" }
+                ordered.forEach {
+                    if(!rerendered.contains(it)){
+                        swallowExceptions(message = { "While rerendering $it" }) {
                             @Suppress("UNCHECKED_CAST")
                             (it as AdvancedComponent<*, Tag>).updateRender(it.renderIn)
                         }
                     }
-                } finally {
-                    hasReRendered = null
-                    renderingThread = null
                 }
+            } finally {
+                alreadyRerendered = null
             }
+        }
+    }
+
+    private fun triggerReRender() {
+        if(batchReRenders.get() == 0){
+            rerender()
         }
     }
 
@@ -131,18 +118,15 @@ class ClientContext(val clientId : UUID, val root : ShadeRoot) {
         triggerReRender()
     }
 
-    private val nextCallbackId : AtomicLong = AtomicLong(0)
-    private val storedCallbacks = Collections.synchronizedMap(mutableMapOf<Long, CallbackData>())
-    /**
-     * This is used to make processing of user events sequential
-     */
-    @Volatile private var eventProcessing = false
+    //These are used to make processing of user events sequential
+    @Volatile private var isEventProcessing = false
     private val eventQueue : Queue<Pair<suspend (Json?) -> Unit, Json?>> = ArrayDeque()
 
     private val supervisor = SupervisorJob()
     internal val coroutineScope = CoroutineScope(supervisor)
 
     internal fun cleanup(){
+        //Most cleanup will be handled by the garbage collector.
         GlobalScope.launch {
             supervisor.cancel()
         }
@@ -171,6 +155,24 @@ class ClientContext(val clientId : UUID, val root : ShadeRoot) {
         }
     }
 
+    internal fun <T> swallowExceptions(message: (()->String)? = null, cb : ()->T) : T? {
+        return try {
+            cb()
+        } catch(t : Throwable){
+            try {
+                if(message != null){
+                    logger.error(t){ message() }
+                } else {
+                    logger.error(t.message, t)
+                }
+            } catch(t2 : Throwable){
+                t.addSuppressed(t2)
+                logger.error(t) { "(Could not generate a message for this exception)" }
+            }
+            null
+        }
+    }
+
 
     internal fun callCallback(id : Long, data : Json?) : Unit = logging {
         logger.trace { "Calling callback $id with data ${data?.raw?.ellipsizeAfter(100)}" }
@@ -183,12 +185,12 @@ class ClientContext(val clientId : UUID, val root : ShadeRoot) {
             //We need to make sure only one event callback is running at a time, and put any that should run later into
             //a queue.
             synchronized(eventQueue){
-                if(eventProcessing){
+                if(isEventProcessing){
                     logger.trace { "Queuing processing of callback $id" }
                     eventQueue.add(callback.callback to data)
                 } else {
                     logger.trace { "Starting new processing coroutine for callback $id" }
-                    eventProcessing = true
+                    isEventProcessing = true
                     coroutineScope.launch(context = MDCContext()) {
                         batchingReRenders {
                             runEventLockedCallback(callback.callback, data)
@@ -200,38 +202,19 @@ class ClientContext(val clientId : UUID, val root : ShadeRoot) {
         } else {
             coroutineScope.launch(context = MDCContext()) {
                 batchingReRenders {
-                    try {
-                        callback.callback(data)
-                    } catch(t : Throwable){
-                        if(t is CancellationException){
-                            logger.info(t) { "Callback processing cancelled" }
-                        } else {
-                            logger.error(t) { "Error processing callback" }
-                        }
-                    }
+                    runCallbackCatchingErrors(callback.callback, data)
                 }
             }
         }
     }
 
-    internal suspend fun runEventLockedCallback(callback: suspend (Json?) -> Unit, data: Json?){
+    private suspend fun runEventLockedCallback(callback: suspend (Json?) -> Unit, data: Json?){
         var currentCallback = callback
         var currentData = data
         while(true){
-            try {
-                logger.trace { "Running a callback" }
-                currentCallback(currentData)
-            } catch(t : Throwable){
-                if(t is CancellationException){
-                    logger.info(t) { "Callback cancelled" }
-                } else {
-                    logger.error(t) { "Error processing event callback" }
-                }
-            } finally {
-                logger.trace { "Callback done" }
-            }
+            logger.trace { "Running a callback" }
+            runCallbackCatchingErrors(currentCallback, currentData)
             logger.trace { "Checking event queue" }
-
             synchronized(eventQueue){
                 if(eventQueue.isNotEmpty()){
                     logger.trace { "Found a callback" }
@@ -240,14 +223,28 @@ class ClientContext(val clientId : UUID, val root : ShadeRoot) {
                     currentData = cb.second
                 } else {
                     logger.trace { "No callback; disable event processing" }
-                    eventProcessing = false
+                    isEventProcessing = false
                     return
                 }
             }
         }
-
     }
 
+    private suspend fun runCallbackCatchingErrors(callback: suspend (Json?) -> Unit, data: Json?){
+        try {
+            callback(data)
+        } catch(t : Throwable){
+            if(t is CancellationException){
+                logger.info(t) { "Callback processing cancelled" }
+            } else {
+                logger.error(t) { "Error processing callback" }
+            }
+        }
+    }
+
+
+    private val nextCallbackId : AtomicLong = AtomicLong(0)
+    private val storedCallbacks = Collections.synchronizedMap(mutableMapOf<Long, CallbackData>())
 
     private fun getCallback(id : Long) : CallbackData? {
         return storedCallbacks[id] ?: run {
@@ -271,7 +268,7 @@ class ClientContext(val clientId : UUID, val root : ShadeRoot) {
     }
 
     private val handlerLock = Object()
-    private var handler : ShadeRoot.MessageHandler? = null
+    @Volatile private var handler : ShadeRoot.MessageHandler? = null
 
     private data class QueuedMessage(val errorTag : String?, val message : String)
     private var javascriptQueue : MutableList<QueuedMessage>? = Collections.synchronizedList(mutableListOf())

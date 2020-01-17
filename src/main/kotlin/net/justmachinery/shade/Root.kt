@@ -13,7 +13,9 @@ import java.util.concurrent.TimeUnit
 import kotlin.reflect.KClass
 import kotlin.reflect.full.isSubclassOf
 
-
+/**
+ * Configuration object.
+ */
 class ShadeRoot(
     /**
      * Websocket URL at which the shade endpoint will be accessible
@@ -43,11 +45,11 @@ class ShadeRoot(
         private val shadeScript = ClassLoader.getSystemClassLoader().getResource("shade.js")!!.readText()
     }
 
-    fun <T : Any, RenderIn : Tag> constructComponent(clazz : KClass<out AdvancedComponent<T, RenderIn>>, props : ComponentInitData<T>) : AdvancedComponent<T, RenderIn> {
+    internal fun <T : Any, RenderIn : Tag> constructComponent(clazz : KClass<out AdvancedComponent<T, RenderIn>>, props : ComponentInitData<T>) : AdvancedComponent<T, RenderIn> {
         val component = when {
             clazz == FunctionComponent::class -> {
                 @Suppress("UNCHECKED_CAST")
-                FunctionComponent(props as ComponentInitData<RenderFunction<RenderIn>>) as AdvancedComponent<T, RenderIn>
+                FunctionComponent(props as ComponentInitData<FunctionComponent.Props<RenderIn>>) as AdvancedComponent<T, RenderIn>
             }
             clazz.isSubclassOf(Component::class) || clazz.isSubclassOf(ComponentInTag::class) -> {
                 try {
@@ -61,6 +63,7 @@ class ShadeRoot(
                 clazz.java.getDeclaredConstructor(ComponentInitData::class.java).also { it.isAccessible = true }.newInstance(props)
             }
         }!!
+        component.props = props.props
         afterConstructComponent(component)
         return component
     }
@@ -70,7 +73,6 @@ class ShadeRoot(
             context = context,
             key = null,
             props = props,
-            kClass = root,
             renderIn = builder::class,
             treeDepth = 0
         )
@@ -188,4 +190,14 @@ class ShadeRoot(
 
         private val delayExecutor by lazy { Executors.newSingleThreadScheduledExecutor() }
     }
+}
+
+fun <Props : Any, RenderIn : HtmlBlockTag> RenderIn.installRoot(root: ShadeRoot, component : KClass<out AdvancedComponent<Props, RenderIn>>, props : Props){
+    root.installFramework(this){
+        root.component(it, this, component, props)
+    }
+}
+
+fun <Props : PropsType<Props, T>, T : AdvancedComponent<Props, RenderIn>, RenderIn : HtmlBlockTag> RenderIn.installRoot(root: ShadeRoot, props : Props){
+    installRoot(root, props.type, props)
 }

@@ -10,49 +10,58 @@ import kotlinx.html.stream.appendHTML
 import kotlinx.html.visit
 import net.justmachinery.shade.AdvancedComponent
 import net.justmachinery.shade.ComponentInitData
+import net.justmachinery.shade.FunctionComponent
+import net.justmachinery.shade.runRenderNoChangesAllowed
 import org.apache.commons.text.StringEscapeUtils
 import java.io.ByteArrayOutputStream
 import java.util.*
 import kotlin.reflect.KClass
 
 internal data class ComponentRenderState(
-    val componentId : UUID = UUID.randomUUID(),
+    val componentId : Int,
+    //Root of this component's render tree; it's children etc.
     var renderTreeRoot : RenderTreeLocation? = null,
+    //This component's location within the broader render stack
     var location : RenderTreeLocationFrame? = null,
+    //Stores callback IDs associated with this component, allowing cleanup on rerender
     var lastRenderCallbackIds : SortedSet<Long> = sortedSetOf(),
-    var renderTreePathToCallbackId : BiMap<Pair<RenderTreeTagLocation, String>, Long> = HashBiMap.create(0)
+    //Allows for callback ID reuse for the same event in the same place in the render tree, which allows for delay compensation
+    var renderTreePathToCallbackId : BiMap<Pair<RenderTreeTagLocation, String>, Long> = HashBiMap.create(0),
+    //Temporary storage is necessary due to Kotlin's current lack of functions with two receivers,
+    //as a hacky workaround.
+    var renderingFunction : FunctionComponent<*>? = null
 )
 
 internal fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.renderInternal(tag : RenderIn, addMarkers : Boolean){
     val oldRenderCallbackIds = renderState.lastRenderCallbackIds
     renderState.lastRenderCallbackIds = TreeSet()
-    context.hasReRendered?.add(this)
-    context.withComponentRendering(this){
-        if(addMarkers) SCRIPT(listOfNotNull(
-            "type" to "shade",
-            "id" to renderState.componentId.toString(),
-            this.key?.let { "data-key" to it }
-        ).toMap(), tag.consumer).visit {}
+    context.markAlreadyRerendered(this)
+    if(addMarkers) SCRIPT(listOfNotNull(
+        "type" to "shade",
+        "id" to "shade"+renderState.componentId.toString(),
+        this.key?.let { "data-key" to it }
+    ).toMap(), tag.consumer).visit {}
+
+    try {
         tag.run {
-            updateRenderTree(renderState){
-                try {
-                    this.render()
-                } catch(t : Throwable){
-                    if(!this@renderInternal.onCatch(t)){
-                        throw t
+            updateRenderTree(renderState) {
+                this@renderInternal.renderDependencies.runRecordingDependencies {
+                    runRenderNoChangesAllowed {
+                        this.doRender()
                     }
                 }
             }
         }
+    } finally {
         if(addMarkers) SCRIPT(mapOf(
             "type" to "shade",
-            "id" to renderState.componentId.toString() + "-end"
+            "id" to "shade"+renderState.componentId.toString() + "e"
         ), tag.consumer).visit {}
-    }
 
-    Sets.difference(oldRenderCallbackIds, renderState.lastRenderCallbackIds).forEach {
-        context.removeCallback(it)
-        renderState.renderTreePathToCallbackId.inverse().remove(it)
+        Sets.difference(oldRenderCallbackIds, renderState.lastRenderCallbackIds).forEach {
+            context.removeCallback(it)
+            renderState.renderTreePathToCallbackId.inverse().remove(it)
+        }
     }
 }
 
@@ -68,7 +77,7 @@ internal fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.updateRender(clazz 
     }
 
     val escapedHtml = StringEscapeUtils.escapeEcmaScript(html)
-    context.executeScript("r(\"${renderState.componentId}\",\"$escapedHtml\");")
+    context.executeScript("r(${renderState.componentId},\"$escapedHtml\");")
 }
 
 
@@ -84,17 +93,15 @@ fun <T : Any, RenderIn : Tag> addComponent(
     val (renderType, comp) = getOrConstructComponent(parent, component, renderIn, props, key)
     when(renderType){
         GetComponentResult.NEW, GetComponentResult.EXISTING_RERENDER -> {
-            comp.run {
-                renderInternal(block, addMarkers = true)
-            }
+            comp.renderInternal(block, addMarkers = true)
             if(renderType == GetComponentResult.NEW){
-                comp.mounted()
+                comp.doMount()
             }
         }
         GetComponentResult.EXISTING_KEEP -> {
             SCRIPT(listOfNotNull(
                 "type" to "shade",
-                "id" to comp.renderState.componentId.toString(),
+                "id" to "shade"+comp.renderState.componentId.toString(),
                 "data-shade-keep" to "true",
                 comp.key?.let { "data-key" to it }
             ).toMap(), block.consumer).visit {}
@@ -126,7 +133,7 @@ private fun <T : Any, RenderIn : Tag> getOrConstructComponent(
         } else {
             frame.oldRenderTreeLocation?.children?.getOrNull(frame.renderTreeChildIndex)
         }
-        if(oldComponent is RenderTreeChild.ComponentChild && oldComponent.component.kClass == component){
+        if(oldComponent is RenderTreeChild.ComponentChild && oldComponent.component::class == component){
             @Suppress("UNCHECKED_CAST")
             (oldComponent.component as AdvancedComponent<T, RenderIn>)
             return if(oldComponent.component.props == props){
@@ -143,7 +150,6 @@ private fun <T : Any, RenderIn : Tag> getOrConstructComponent(
             context = parent.context,
             props = props,
             key = key,
-            kClass = component,
             renderIn = renderIn,
             treeDepth = parent.treeDepth + 1
         )

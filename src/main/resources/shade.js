@@ -30,7 +30,7 @@
             const child = list[i];
             if ((!excludeEnds || (i > 0 && i < list.length - 1)) && child instanceof HTMLElement && child.tagName == "SCRIPT" && child.getAttribute("type") === "shade" && child.getAttribute("data-shade-keep") == null) {
                 const component = [];
-                const endId = child.id + "-end";
+                const endId = child.id + "e";
                 while (i < list.length) {
                     const subChild = list[i];
                     component.push(subChild);
@@ -168,7 +168,7 @@
         return finalChildren;
     }
     function r(targetId, html) {
-        const target = document.getElementById(targetId);
+        const target = document.getElementById("shade" + targetId);
         if (!target) {
             return;
         }
@@ -176,7 +176,7 @@
         htmlDom.innerHTML = html;
         const included = [];
         let current = target.nextSibling;
-        while (current != null && (!(current instanceof HTMLElement) || current.id != targetId + "-end")) {
+        while (current != null && (!(current instanceof HTMLElement) || current.id != "shade" + targetId + "e")) {
             included.push(current);
             current = current.nextSibling;
         }
