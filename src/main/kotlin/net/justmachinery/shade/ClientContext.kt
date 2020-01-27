@@ -122,7 +122,7 @@ class ClientContext(
     @Volatile private var isEventProcessing = false
     private val eventQueue : Queue<Pair<suspend (Json?) -> Unit, Json?>> = ArrayDeque()
 
-    private val supervisor = SupervisorJob()
+    internal val supervisor = SupervisorJob()
     internal val coroutineScope = CoroutineScope(supervisor)
 
     internal fun cleanup(){

@@ -2,6 +2,7 @@ package net.justmachinery.shade
 
 import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.html.*
 import mu.KLogging
 import net.justmachinery.shade.render.ComponentRenderState
@@ -10,6 +11,7 @@ import net.justmachinery.shade.render.addComponent
 import net.justmachinery.shade.render.toRenderTreeTagLocation
 import java.lang.reflect.ParameterizedType
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.coroutines.CoroutineContext
 import kotlin.reflect.KClass
 
 
@@ -67,7 +69,7 @@ class FunctionComponent<RenderIn : Tag>(fullProps : ComponentInitData<Props<Rend
  * Like [Component], but allows specifying the type of tag to render in, and passes in props non-magically.
  * This is exposed in case you need that.
  */
-abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : ComponentInitData<PropType>) : CoroutineScope by fullProps.context.coroutineScope {
+abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : ComponentInitData<PropType>) : CoroutineScope {
     companion object : KLogging()
 
     var _props : PropType? = null
@@ -105,6 +107,10 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
      */
     open fun onCatch(exception: ComponentException) : Boolean = false
 
+
+    private val supervisorJob = SupervisorJob(parent = fullProps.context.supervisor)
+    override val coroutineContext: CoroutineContext get() = supervisorJob
+
     internal fun RenderIn.doRender(){
         maybeHandleExceptions(message = { "While rendering" }){
             render()
@@ -119,6 +125,7 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
     }
     internal fun doUnmount(){
         renderDependencies.dispose()
+        supervisorJob.cancel()
         context.swallowExceptions {
             maybeHandleExceptions(message = { "While unmounting" }){
                 unmounted()
