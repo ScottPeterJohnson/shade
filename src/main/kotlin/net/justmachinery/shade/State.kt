@@ -12,7 +12,7 @@ fun reaction(block: () -> Unit) = Reaction(block)
 fun <T> action(block: () -> T) = runChangeBatch(block)
 
 
-internal class Atom {
+class Atom {
     internal val observers : MutableSet<ReactiveObserver> = Collections.newSetFromMap(ConcurrentHashMap())
 
     fun isObserved() = observers.isNotEmpty()
