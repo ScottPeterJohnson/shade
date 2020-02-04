@@ -140,8 +140,8 @@ internal fun <T> runChangeBatch(
                     val component = it.comp.get()
                     if(component == null){ it.dispose() }
                     component
-                }.groupBy { it.context }.forEach { (context, components) ->
-                    context.setComponentsDirty(components)
+                }.groupBy { it.client }.forEach { (client, components) ->
+                    client.setComponentsDirty(components)
                 }
             }
         }

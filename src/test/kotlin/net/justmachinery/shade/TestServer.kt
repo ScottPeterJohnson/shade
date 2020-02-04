@@ -36,8 +36,8 @@ fun main(){
                     h2 {
                         +"Shade test page"
                     }
-                    root.installFramework(this){ context ->
-                        root.component(context, this, RootComponent::class, Unit)
+                    root.installFramework(this){ client ->
+                        root.component(client, this, RootComponent::class, Unit)
                     }
                 }
             }
@@ -188,10 +188,10 @@ class RootComponent : Component<Unit /* Takes effectively no props */>() {
             button{
                 onClick {
                     //We can execute JS as necessary in our action handlers.
-                    context.executeScript("setTimeout(function(){ throw Error(\"I am a delayed error\") }, 3000)")
+                    client.executeScript("setTimeout(function(){ throw Error(\"I am a delayed error\") }, 3000)")
                     //We can also evaluate JS expressions. This particular one will throw an error, which will
                     //appear as a JavascriptException.
-                    val js = context.runExpression("notAValidSymbol").await()
+                    val js = client.runExpression("notAValidSymbol").await()
                     //Both errors will by default appear in server logs.
                     println("Shouldn't get here: $js")
                 }
@@ -201,7 +201,7 @@ class RootComponent : Component<Unit /* Takes effectively no props */>() {
                 onClick {
                     try {
                         //This is an example of erroring from a JS Promise expression.
-                        context.runPromise("new Promise(function(request, reject){ setTimeout(function(){ reject(Error(\"I am a delayed promise error\")) }, 3000) })").await()
+                        client.runPromise("new Promise(function(request, reject){ setTimeout(function(){ reject(Error(\"I am a delayed promise error\")) }, 3000) })").await()
                     } catch(e : JavascriptException){
                         //We can catch the error if necessary.
                         println("Error caught! $e")
@@ -245,7 +245,7 @@ class RootComponent : Component<Unit /* Takes effectively no props */>() {
                     onValueChange {
                         val delay = it.toLong()
                         //Halve the delay (it's a round trip)
-                        context.root.simulateExtraDelay = if(delay == 0L) null else Duration.of(delay/2, ChronoUnit.MILLIS)
+                        client.root.simulateExtraDelay = if(delay == 0L) null else Duration.of(delay/2, ChronoUnit.MILLIS)
                     }
                 }
             }
@@ -255,7 +255,7 @@ class RootComponent : Component<Unit /* Takes effectively no props */>() {
     override fun mounted() {
         //The mounted() lifecycle function allows you to e.g. run JS expressions when the component is mounted
         launch {
-            val result = context.runPromise("new Promise(function(resolve, reject){ setTimeout(function(){ resolve('foo') }, 3000)})").await()
+            val result = client.runPromise("new Promise(function(resolve, reject){ setTimeout(function(){ resolve('foo') }, 3000)})").await()
             println("Component-mounted callback complete. Got: $result")
         }
     }

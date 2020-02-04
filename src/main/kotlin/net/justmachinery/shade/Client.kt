@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicLong
 /**
  * Stores and manages state for a particular client connection.
  */
-class ClientContext(
+class Client(
     /**
      * Unique per-client identifier
      */
@@ -62,7 +62,7 @@ class ClientContext(
     internal fun <RenderIn : Tag> renderRoot(builder : RenderIn, component : AdvancedComponent<*, RenderIn>) = logging {
         logger.debug { "Rendering root $component" }
         synchronized(renderLock){
-            component.context.swallowExceptions(message = { "While adding root" }) {
+            component.client.swallowExceptions(message = { "While adding root" }) {
                 component.renderInternal(builder, addMarkers = true)
                 component.doMount()
             }
@@ -143,7 +143,7 @@ class ClientContext(
                     if(callback == null){
                         logger.warn { "Callback $id threw $exception but its handler expired" }
                     }
-                    root.onUncaughtJavascriptException(this@ClientContext, exception)
+                    root.onUncaughtJavascriptException(this@Client, exception)
                 }
             } catch(t : Throwable){
                 if(t is CancellationException){

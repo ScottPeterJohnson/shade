@@ -32,8 +32,8 @@ class ShadeRoot(
     /**
      * Called whenever an exception is thrown in a client's JS page that cannot be mapped to a deferred
      */
-    val onUncaughtJavascriptException : (ClientContext, JavascriptException)->Unit = { context, err ->
-        logger.error(err){ "Uncaught JS exception for client ${context.clientId}" }
+    val onUncaughtJavascriptException : (Client, JavascriptException)->Unit = { client, err ->
+        logger.error(err){ "Uncaught JS exception for client ${client.clientId}" }
     },
     /**
      * For testing purposes.
@@ -68,22 +68,22 @@ class ShadeRoot(
         return component
     }
 
-    fun <T : Any, RenderIn : Tag> component(context : ClientContext, builder : RenderIn, root : KClass<out AdvancedComponent<T, RenderIn>>, props : T){
+    fun <T : Any, RenderIn : Tag> component(client : Client, builder : RenderIn, root : KClass<out AdvancedComponent<T, RenderIn>>, props : T){
         val propObj = ComponentInitData(
-            context = context,
+            client = client,
             key = null,
             props = props,
             renderIn = builder::class,
             treeDepth = 0
         )
         val component = constructComponent(root, propObj)
-        context.renderRoot(builder, component)
+        client.renderRoot(builder, component)
     }
 
-    fun installFramework(builder : HtmlBlockTag, cb : (ClientContext)-> Unit){
+    fun installFramework(builder : HtmlBlockTag, cb : (Client)-> Unit){
         val id = UUID.randomUUID()
-        val context = ClientContext(id, this)
-        clientDataMap[id] = context
+        val client = Client(id, this)
+        clientDataMap[id] = client
         withLoggingInfo("shadeClientId" to id.toString()){
             logger.info { "Created new client id" }
         }
@@ -103,19 +103,19 @@ class ShadeRoot(
                 }
             }
         }
-        cb(context)
+        cb(client)
     }
 
     fun handler(send : (String)->Unit, disconnect : ()->Unit) = MessageHandler(send, disconnect)
 
-    private val clientDataMap = Collections.synchronizedMap(mutableMapOf<UUID, ClientContext>())
+    private val clientDataMap = Collections.synchronizedMap(mutableMapOf<UUID, Client>())
 
     inner class MessageHandler internal constructor(
         private val send : (String)->Unit,
         private val disconnect : ()->Unit
     ) {
         var clientId : UUID? = null
-        private var clientData : ClientContext? = null
+        private var clientData : Client? = null
 
         internal fun sendMessage(errorTag : String?, message : String){
             if (simulateExtraDelay == null) {

@@ -35,7 +35,7 @@ internal data class ComponentRenderState(
 internal fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.renderInternal(tag : RenderIn, addMarkers : Boolean){
     val oldRenderCallbackIds = renderState.lastRenderCallbackIds
     renderState.lastRenderCallbackIds = TreeSet()
-    context.markAlreadyRerendered(this)
+    client.markAlreadyRerendered(this)
     if(addMarkers) SCRIPT(listOfNotNull(
         "type" to "shade",
         "id" to "shade"+renderState.componentId.toString(),
@@ -59,7 +59,7 @@ internal fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.renderInternal(tag 
         ), tag.consumer).visit {}
 
         Sets.difference(oldRenderCallbackIds, renderState.lastRenderCallbackIds).forEach {
-            context.removeCallback(it)
+            client.removeCallback(it)
             renderState.renderTreePathToCallbackId.inverse().remove(it)
         }
     }
@@ -77,7 +77,7 @@ internal fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.updateRender(clazz 
     }
 
     val escapedHtml = StringEscapeUtils.escapeEcmaScript(html)
-    context.executeScript("r(${renderState.componentId},\"$escapedHtml\");")
+    client.executeScript("r(${renderState.componentId},\"$escapedHtml\");")
 }
 
 
@@ -144,10 +144,10 @@ private fun <T : Any, RenderIn : Tag> getOrConstructComponent(
             }
         }
     }
-    return GetComponentResult.NEW to parent.context.root.constructComponent(
+    return GetComponentResult.NEW to parent.client.root.constructComponent(
         component,
         ComponentInitData(
-            context = parent.context,
+            client = parent.client,
             props = props,
             key = key,
             renderIn = renderIn,

@@ -16,7 +16,7 @@ import kotlin.reflect.KClass
 
 
 class ComponentInitData<T : Any>(
-    val context : ClientContext,
+    val client : Client,
     val props : T,
     val key : String? = null,
     val renderIn : KClass<out Tag>,
@@ -80,13 +80,13 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
             e.g. "val foo get() = props.bar"
         """.trimIndent())
         internal set(value) { _props = value }
-    val context = fullProps.context
+    val client = fullProps.client
     internal val key = fullProps.key
     internal val renderIn = fullProps.renderIn
     internal val treeDepth = fullProps.treeDepth
 
     //This is just state moved to another file for clarity
-    internal val renderState = ComponentRenderState(context.nextComponentId())
+    internal val renderState = ComponentRenderState(client.nextComponentId())
     @Suppress("LeakingThis")
     internal val renderDependencies = Render(this)
 
@@ -108,7 +108,7 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
     open fun onCatch(exception: ComponentException) : Boolean = false
 
 
-    private val supervisorJob = SupervisorJob(parent = fullProps.context.supervisor)
+    private val supervisorJob = SupervisorJob(parent = fullProps.client.supervisor)
     override val coroutineContext: CoroutineContext get() = supervisorJob
 
     internal fun RenderIn.doRender(){
@@ -117,7 +117,7 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
         }
     }
     internal fun doMount(){
-        context.swallowExceptions {
+        client.swallowExceptions {
             maybeHandleExceptions(message = { "While mounting" }){
                 mounted()
             }
@@ -126,7 +126,7 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
     internal fun doUnmount(){
         renderDependencies.dispose()
         supervisorJob.cancel()
-        context.swallowExceptions {
+        client.swallowExceptions {
             maybeHandleExceptions(message = { "While unmounting" }){
                 unmounted()
             }
@@ -211,7 +211,7 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
         val realThis = realComponentThis()
         val old = realThis.renderState.renderTreePathToCallbackId[pos to eventName]
 
-        val (id, js) = realThis.context.eventCallbackStringInternal(
+        val (id, js) = realThis.client.eventCallbackStringInternal(
             prefix = prefix,
             suffix = suffix,
             data = data,
