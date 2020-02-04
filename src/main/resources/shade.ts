@@ -204,16 +204,18 @@
 
     function runElementScripts(base : HTMLElement){
         base.querySelectorAll("[data-shade-element-js]").forEach((value)=>{
-            const oldJs : string|undefined = (value as any).shadeElementJs;
-            const newJs = value.getAttribute("data-shade-element-js")!;
-            if(newJs != oldJs){
+            const oldJsInfo : string|undefined = (value as any).shadeElementJs;
+            const newJsInfo = value.getAttribute("data-shade-element-js")!;
+            const newJsRerenderType = newJsInfo.charAt(0);
+            if(newJsRerenderType == 'A' || (newJsRerenderType == "R" && newJsInfo != oldJsInfo)){
+                const actualNewJs = newJsInfo.substring(1);
                 // noinspection JSUnusedLocalSymbols
                 const it = value;
                 try {
-                    eval(newJs);
-                    (value as any).shadeElementJs = newJs;
+                    eval(actualNewJs);
+                    (value as any).shadeElementJs = newJsInfo;
                 } catch(e){
-                    sendIfError(e, undefined, newJs)
+                    sendIfError(e, undefined, newJsInfo)
                 }
             }
         })

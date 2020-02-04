@@ -414,27 +414,12 @@ class KeyRerenderTestShow : Component<Int>() {
 }
 
 /**
- * Using applyJs() we can specify JS to be executed when a DOM element is created, but not on subsequent rerenders.
- * This component uses this wrongly to change DOM, which can be overridden on a rerender.
+ * Using applyJs() we can specify JS to be executed when a DOM element is rendered.
  */
 class ApplyJsTest : Component<Unit>(){
-    var unchanged by observable(0)
-    var counter by observable(0)
     override fun HtmlBlockTag.render() {
         div {
-            applyJs("it.innerHTML = 'hello world'; console.log('js applied: $counter')")
-        }
-        button {
-            onClick {
-                unchanged += 1
-            }
-            +"Click to rerender w/o changing JS ($unchanged)"
-        }
-        button {
-            onClick {
-                counter += 1
-            }
-            +"Click to rerender w/ changing JS ($counter)"
+            applyJs("it.innerHTML = 'hello world';")
         }
     }
 }

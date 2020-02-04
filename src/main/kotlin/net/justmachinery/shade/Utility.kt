@@ -46,9 +46,15 @@ var HtmlBlockTag.key : String?
     }
 
 
-
-fun HtmlBlockTag.applyJs(@Language("JavaScript 1.8", prefix = "const it = document.createElement('div'); ") js : String){
-    attributes["data-shade-element-js"] = js
+/**
+ * Specifies JS to be executed after the dom element renders.
+ * @param onlyOnCreate If true, will run only when the DOM element is created or the JS changes, not on rerenders.
+ */
+fun HtmlBlockTag.applyJs(
+    @Language("JavaScript 1.8", prefix = "const it = document.createElement('div'); ") js : String,
+    onlyOnCreate : Boolean = false
+){
+    attributes["data-shade-element-js"] = "${if(onlyOnCreate) 'R' else 'A'}$js"
 }
 
 data class Json(val raw : String)

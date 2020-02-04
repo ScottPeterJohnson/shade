@@ -185,17 +185,19 @@
     }
     function runElementScripts(base) {
         base.querySelectorAll("[data-shade-element-js]").forEach((value) => {
-            const oldJs = value.shadeElementJs;
-            const newJs = value.getAttribute("data-shade-element-js");
-            if (newJs != oldJs) {
+            const oldJsInfo = value.shadeElementJs;
+            const newJsInfo = value.getAttribute("data-shade-element-js");
+            const newJsRerenderType = newJsInfo.charAt(0);
+            if (newJsRerenderType == 'A' || (newJsRerenderType == "R" && newJsInfo != oldJsInfo)) {
+                const actualNewJs = newJsInfo.substring(1);
                 // noinspection JSUnusedLocalSymbols
                 const it = value;
                 try {
-                    eval(newJs);
-                    value.shadeElementJs = newJs;
+                    eval(actualNewJs);
+                    value.shadeElementJs = newJsInfo;
                 }
                 catch (e) {
-                    sendIfError(e, undefined, newJs);
+                    sendIfError(e, undefined, newJsInfo);
                 }
             }
         });
