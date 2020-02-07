@@ -68,13 +68,19 @@ class ShadeRoot(
         return component
     }
 
-    fun <T : Any, RenderIn : Tag> component(client : Client, builder : RenderIn, root : KClass<out AdvancedComponent<T, RenderIn>>, props : T){
+    fun <T : Any, RenderIn : Tag> component(
+        client : Client,
+        builder : RenderIn,
+        root : KClass<out AdvancedComponent<T, RenderIn>>,
+        props : T
+    ){
         val propObj = ComponentInitData(
             client = client,
             key = null,
             props = props,
             renderIn = builder::class,
-            treeDepth = 0
+            treeDepth = 0,
+            context = emptyContext
         )
         val component = constructComponent(root, propObj)
         client.renderRoot(builder, component)

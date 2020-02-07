@@ -8,10 +8,7 @@ import kotlinx.html.Tag
 import kotlinx.html.TagConsumer
 import kotlinx.html.stream.appendHTML
 import kotlinx.html.visit
-import net.justmachinery.shade.AdvancedComponent
-import net.justmachinery.shade.ComponentInitData
-import net.justmachinery.shade.FunctionComponent
-import net.justmachinery.shade.runRenderNoChangesAllowed
+import net.justmachinery.shade.*
 import org.apache.commons.text.StringEscapeUtils
 import java.io.ByteArrayOutputStream
 import java.util.*
@@ -43,11 +40,13 @@ internal fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.renderInternal(tag 
     ).toMap(), tag.consumer).visit {}
 
     try {
-        tag.run {
-            updateRenderTree(renderState) {
-                this@renderInternal.renderDependencies.runRecordingDependencies {
-                    runRenderNoChangesAllowed {
-                        this.doRender()
+        withComponentContext(context){
+            tag.run {
+                updateRenderTree(renderState) {
+                    this@renderInternal.renderDependencies.runRecordingDependencies {
+                        runRenderNoChangesAllowed {
+                            this.doRender()
+                        }
                     }
                 }
             }
@@ -151,7 +150,8 @@ private fun <T : Any, RenderIn : Tag> getOrConstructComponent(
             props = props,
             key = key,
             renderIn = renderIn,
-            treeDepth = parent.treeDepth + 1
+            treeDepth = parent.treeDepth + 1,
+            context = contextInRenderingThread.get()!!
         )
     )
 }

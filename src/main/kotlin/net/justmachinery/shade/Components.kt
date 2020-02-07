@@ -20,7 +20,8 @@ class ComponentInitData<T : Any>(
     val props : T,
     val key : String? = null,
     val renderIn : KClass<out Tag>,
-    val treeDepth : Int
+    val treeDepth : Int,
+    val context: ComponentContext
 )
 
 internal val componentPassProps = ThreadLocal<Any?>()
@@ -51,13 +52,13 @@ abstract class ComponentInTag<PropType : Any, RenderIn : Tag> :
 
 typealias RenderFunction<RenderIn> = RenderIn.()->Unit
 class FunctionComponent<RenderIn : Tag>(fullProps : ComponentInitData<Props<RenderIn>>) : AdvancedComponent<FunctionComponent.Props<RenderIn>, RenderIn>(fullProps){
-    data class Props<RenderIn : Tag>(val cb : RenderIn.()->Unit, val parent : AdvancedComponent<*,*>)
+    data class Props<RenderIn : Tag>(val cb : RenderIn.(FunctionComponent<RenderIn>)->Unit, val parent : AdvancedComponent<*,*>)
     override fun RenderIn.render() {
         val parent = props.parent
         val cb = props.cb
         try {
             parent.renderState.renderingFunction = this@FunctionComponent
-            cb()
+            cb(this@FunctionComponent)
         } finally {
             parent.renderState.renderingFunction = null
         }
@@ -81,6 +82,7 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
         """.trimIndent())
         internal set(value) { _props = value }
     val client = fullProps.client
+    val context = fullProps.context
     internal val key = fullProps.key
     internal val renderIn = fullProps.renderIn
     internal val treeDepth = fullProps.treeDepth
@@ -157,6 +159,13 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
 
 
     //Useful helper functions and aliases
+    fun <RenderIn : Tag> RenderIn.startRouting(pathInfo : String, queryString : String, cb : WithRouting<RenderIn>.()->Unit) = startRouting(UrlInfo(pathInfo, queryString), cb)
+    fun <RenderIn : Tag> RenderIn.startRouting(urlInfo: UrlInfo, cb : WithRouting<RenderIn>.()->Unit) = startRoutingInternal(realComponentThis(), urlInfo, cb)
+    fun <RenderIn : Tag> RenderIn.route(cb : WithRouting<RenderIn>.()->Unit) = routeInternal(realComponentThis(), cb)
+
+    fun <R,T> addContext(identifier: ComponentContextIdentifier<R>, value : R, cb : ()->T) = context.add(arrayOf(ComponentContextValue(identifier, value)), cb)
+    fun <T> addContext(vararg values : ComponentContextValue<*>, cb: ()->T) = context.add(values, cb)
+
     fun <Props : PropsType<Props, T>, T : AdvancedComponent<Props, RenderIn>, RenderIn : Tag> RenderIn.add(pr : Props, key : String? = null) =
         @Suppress("UNCHECKED_CAST")
         addComponent(
@@ -187,6 +196,17 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
      * for shade functions like e.g. onChange.
      */
     fun <RenderIn : Tag> RenderIn.render(cb : RenderFunction<RenderIn>){
+        @Suppress("UNCHECKED_CAST")
+        add(
+            FunctionComponent::class as KClass<FunctionComponent<RenderIn>>,
+            FunctionComponent.Props(cb = { cb() }, parent = this@AdvancedComponent)
+        )
+    }
+
+    /**
+     * As [render] but not eliding the new component context
+     */
+    fun <RenderIn : Tag> RenderIn.renderWithNewComponent(cb : RenderIn.(FunctionComponent<RenderIn>)->Unit){
         @Suppress("UNCHECKED_CAST")
         add(
             FunctionComponent::class as KClass<FunctionComponent<RenderIn>>,

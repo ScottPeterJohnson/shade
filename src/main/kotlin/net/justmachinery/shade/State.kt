@@ -9,7 +9,7 @@ fun <T> react(value: T) = ObservableValue(value)
 fun <T> observable(value: T) = ObservableValue(value)
 fun <T> computed(block: () -> T) = ComputedValue(block)
 fun reaction(block: () -> Unit) = Reaction(block)
-fun <T> action(block: () -> T) = runChangeBatch(block)
+fun <T> action(block: () -> T) = runChangeBatch(false, block)
 
 
 class Atom {
@@ -22,7 +22,7 @@ class Atom {
     fun reportChanged() {
         when(val batch = changeBatch.get()){
             null -> {
-                runChangeBatch {
+                runChangeBatch(false) {
                     (changeBatch.get() as ChangeBatch.Batch).changes.add(this)
                 }
             }
@@ -76,7 +76,7 @@ sealed class ReactiveObserver {
 private val changeBatch = ThreadLocal<ChangeBatch>()
 private sealed class ChangeBatch {
     object Rendering : ChangeBatch()
-    data class Batch(val changes : MutableSet<Atom> = mutableSetOf()) : ChangeBatch()
+    data class Batch(val changes : MutableSet<Atom>) : ChangeBatch()
 }
 private val observeBlock = ThreadLocal<MutableSet<Atom>>()
 
@@ -95,11 +95,20 @@ internal fun runRenderNoChangesAllowed(block : ()->Unit){
 }
 
 internal fun <T> runChangeBatch(
+    /**
+     * If true, then allows changes even while rendering
+     */
+    force : Boolean,
     block: () -> T
 ): T {
-    when(changeBatch.get()){
-        null -> {}
-        ChangeBatch.Rendering -> { throw IllegalStateException("Can't make changes inside a render block!") }
+    val isRendering = when(changeBatch.get()){
+        null -> { false }
+        ChangeBatch.Rendering -> {
+            if(!force){
+                throw IllegalStateException("Can't make changes inside a render block!")
+            }
+            true
+        }
         else -> { return block() }
     }
 
@@ -147,7 +156,11 @@ internal fun <T> runChangeBatch(
         }
         return returnValue
     } finally {
-        changeBatch.remove()
+        if(isRendering){
+            changeBatch.set(ChangeBatch.Rendering)
+        } else {
+            changeBatch.remove()
+        }
     }
 }
 

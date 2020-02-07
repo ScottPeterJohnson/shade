@@ -10,6 +10,7 @@ import org.eclipse.jetty.websocket.api.annotations.OnWebSocketClose
 import org.eclipse.jetty.websocket.api.annotations.OnWebSocketConnect
 import org.eclipse.jetty.websocket.api.annotations.OnWebSocketMessage
 import org.eclipse.jetty.websocket.api.annotations.WebSocket
+import spark.Route
 import spark.Service
 import java.awt.Desktop
 import java.net.URI
@@ -29,7 +30,7 @@ fun main(){
         webSocket("/shade", WebSocketHandler::class.java)
 
         //Create a test page that uses shade.
-        get("/test"){ request, response ->
+        val shadeDemo = Route { request, response ->
             createHTML(prettyPrint = false).html {
                 body {
                     //You can mix shade with normal HTML templates.
@@ -37,14 +38,21 @@ fun main(){
                         +"Shade test page"
                     }
                     root.installFramework(this){ client ->
-                        root.component(client, this, RootComponent::class, Unit)
+                        root.component(
+                            client = client,
+                            builder = this,
+                            root = RootComponent::class,
+                            props = UrlInfo(request.pathInfo(), request.queryString())
+                        )
                     }
                 }
             }
         }
+        get("/test", shadeDemo)
+        get("/test/*", shadeDemo)
     }
     if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
-        Desktop.getDesktop().browse(URI("http://localhost:9905/test"));
+        Desktop.getDesktop().browse(URI("http://localhost:9905/test/"));
     }
 }
 
@@ -81,7 +89,33 @@ class WebSocketHandler {
  * This is our root component. A component is, like React, a combination of props, state, and the ability to rerender as
  * a chunk.
  */
-class RootComponent : Component<Unit /* Takes effectively no props */>() {
+class RootComponent : Component<UrlInfo /* Takes a single prop; the page URL */>() {
+    //Render function. Should be a function of state and props, like React.
+    override fun HtmlBlockTag.render() {
+        //This component just does top-level routing.
+        startRouting(props){
+            match("test"){
+                route {
+                    matchRoot {
+                        add(RootPageComponent::class, Unit)
+                    }
+                    match("routing"){
+                        add(RoutingPageComponent::class, Unit)
+                    }
+                    notFound {
+                        div {
+                            +"Page not found!"
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+}
+
+class RootPageComponent : Component<Unit>(){
     var rootRerenders by observable(0)
     //This is the syntax for an observable piece of per-component state.
     //When it's reassigned, this component is marked as dirty and will be redrawn.
@@ -96,7 +130,6 @@ class RootComponent : Component<Unit /* Takes effectively no props */>() {
 
     var newTaskName : String = ""
 
-    //Render function. Should be a function of state and props, like React.
     override fun HtmlBlockTag.render() {
         div {
             newBackgroundColorOnRerender()
@@ -232,6 +265,9 @@ class RootComponent : Component<Unit /* Takes effectively no props */>() {
             h2 { +"Computed State" }
             add(ComputedState::class)
 
+            h2 { +"Routing" }
+            a(href = "routing"){ +"Click here to go to a routing page" }
+
             h2 { +"Demo settings" }
             div {
                 //Input delay compensation can route user inputs from a past render to the current one, so long as
@@ -316,13 +352,13 @@ class TableRowComponent : ComponentInTag<Int, TBODY>() {
     }
 }
 
-class SharedStateRender : Component<RootComponent.SharedRootState>(){
+class SharedStateRender : Component<RootPageComponent.SharedRootState>(){
     override fun HtmlBlockTag.render() {
         +"You entered: ${props.text}"
     }
 }
 
-class SharedStateInput : Component<RootComponent.SharedRootState>(){
+class SharedStateInput : Component<RootPageComponent.SharedRootState>(){
     override fun HtmlBlockTag.render() {
         div {
             input {
@@ -457,6 +493,15 @@ class ComputedState : Component<Unit>() {
                     +(sum.toString())
                 }
             }
+        }
+    }
+}
+
+class RoutingPageComponent : Component<Unit>() {
+    override fun HtmlBlockTag.render() {
+        h2 { +"Routing page" }
+        p {
+            +"This is a separate page. Try going back!"
         }
     }
 }

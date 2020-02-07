@@ -51,17 +51,13 @@ class Client(
         triggerReRender()
     }
 
-    /**
-     * Only one thread should be rendering for a client at a time.
-     */
-    private val renderLock = Object()
 
     /**
      * Render a root component into an existing HTML builder.
      */
     internal fun <RenderIn : Tag> renderRoot(builder : RenderIn, component : AdvancedComponent<*, RenderIn>) = logging {
         logger.debug { "Rendering root $component" }
-        synchronized(renderLock){
+        renderLock.runSync {
             component.client.swallowExceptions(message = { "While adding root" }) {
                 component.renderInternal(builder, addMarkers = true)
                 component.doMount()
@@ -69,11 +65,17 @@ class Client(
         }
     }
 
+
+    /**
+     * Only one thread should be rendering for a client at a time.
+     */
+    private val renderLock = SingleConcurrentExecution(this::rerender)
+
     /**
      * Re-render dirty components and send their updates over websocket
      */
-    private fun rerender() = logging {
-        synchronized(renderLock){
+    private fun rerender() : Job = coroutineScope.launch {
+        logging {
             val rerendered = mutableSetOf<AdvancedComponent<*,*>>()
             alreadyRerendered = rerendered
             try {
@@ -101,7 +103,7 @@ class Client(
 
     private fun triggerReRender() {
         if(batchReRenders.get() == 0){
-            rerender()
+            renderLock.maybeLaunch()
         }
     }
 

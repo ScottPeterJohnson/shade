@@ -1,5 +1,6 @@
 package net.justmachinery.shade
 
+import kotlinx.coroutines.Job
 import kotlinx.css.CSSBuilder
 import kotlinx.html.CommonAttributeGroupFacade
 import kotlinx.html.HtmlBlockTag
@@ -7,6 +8,7 @@ import kotlinx.html.HtmlTagMarker
 import kotlinx.html.style
 import org.intellij.lang.annotations.Language
 import org.slf4j.MDC
+import java.util.concurrent.atomic.AtomicInteger
 
 @HtmlTagMarker
 fun CommonAttributeGroupFacade.withStyle(builder: CSSBuilder.() -> Unit) {
@@ -58,3 +60,42 @@ fun HtmlBlockTag.applyJs(
 }
 
 data class Json(val raw : String)
+
+internal fun <T1: Any, T2: Any> List<T1>.zipAll(other: List<T2>): List<Pair<T1?, T2?>> {
+    val i1 = this.iterator()
+    val i2 = other.iterator()
+    return generateSequence {
+        if (i1.hasNext() || i2.hasNext()) {
+            Pair(if (i1.hasNext()) i1.next() else null,
+                if (i2.hasNext()) i2.next() else null)
+        } else {
+            null
+        }
+    }.toList()
+}
+
+
+internal class SingleConcurrentExecution(private val launch : ()-> Job){
+    private var exclusiveExecution = java.util.concurrent.Semaphore(1)
+    @Volatile private var waiting = AtomicInteger(0)
+    fun maybeLaunch(){
+        if(waiting.incrementAndGet() == 1){
+            exclusiveExecution.acquire()
+            launch().invokeOnCompletion {
+                val waitingCount = waiting.getAndSet(0)
+                exclusiveExecution.release()
+                if(waitingCount > 1){
+                    maybeLaunch()
+                }
+            }
+        }
+    }
+    fun runSync(cb : ()->Unit){
+        exclusiveExecution.acquire()
+        try {
+            cb()
+        } finally {
+            exclusiveExecution.release()
+        }
+    }
+}
