@@ -1,7 +1,8 @@
-package net.justmachinery.shade
+package net.justmachinery.shade.routing
 
 import kotlinx.html.HtmlTagMarker
 import kotlinx.html.Tag
+import net.justmachinery.shade.*
 import org.apache.http.client.utils.URLEncodedUtils
 import java.nio.charset.Charset
 
@@ -10,10 +11,10 @@ class PathData {
     var queryParams : Map<String, ObservableValue<String?>> = emptyMap()
 
     internal fun update(urlInfo: UrlInfo){
-        val newQueryParams = URLEncodedUtils.parse(urlInfo.queryString, Charset.defaultCharset())
-        val pathSegments = URLEncodedUtils.parsePathSegments(urlInfo.pathInfo)
+        val newQueryParams = urlInfo.queryParams
+        val pathSegments = urlInfo.pathSegments
 
-        pathParts = pathParts.zipAll(pathSegments).mapNotNull { (existing, new) ->
+        pathParts = pathParts.asSequence().zipAll(pathSegments).mapNotNull { (existing, new) ->
             if(existing != null && new != null){
                 existing.set(new)
                 existing
@@ -27,14 +28,14 @@ class PathData {
         }.toList()
 
         queryParams = newQueryParams.associateBy(
-            { it.name },
-            { pair ->
-                val existing = queryParams[pair.name]
+            { it.first },
+            { (name, value) ->
+                val existing = queryParams[name]
                 if(existing != null){
-                    existing.set(pair.value)
+                    existing.set(value)
                     existing
                 } else {
-                    ObservableValue(pair.value)
+                    ObservableValue<String?>(value)
                 }
             }
         )
@@ -46,11 +47,24 @@ data class RoutingContext(
     internal var currentPathSegment : Int = 0
 ){
     fun currentPathFragment() = pathData.pathParts.getOrNull(currentPathSegment)
+
+    fun remainingUrlInfo() : UrlInfo = BasicUrlInfo(
+        pathSegments = pathData.pathParts.asSequence().drop(currentPathSegment).map { it.get() },
+        queryParams = pathData.queryParams.entries.asSequence().mapNotNull { (key, value) ->
+            value.get()?.let { key to it }
+        }
+    )
+
+    companion object {
+        fun get(component: AdvancedComponent<*, *>) = component.context[routingContextIdentifier]
+            ?: throw IllegalStateException("Not currently routing")
+    }
 }
-val routingContextIdentifier = ComponentContextIdentifier<RoutingContext>()
+val routingContextIdentifier =
+    ComponentContextIdentifier<RoutingContext>()
 
 internal fun <RenderIn : Tag> RenderIn.startRoutingInternal(
-    component: AdvancedComponent<*,*>,
+    component: AdvancedComponent<*, *>,
     urlInfo: UrlInfo,
     cb : WithRouting<RenderIn>.()->Unit
 ) {
@@ -64,7 +78,7 @@ internal fun <RenderIn : Tag> RenderIn.startRoutingInternal(
 }
 
 internal fun <RenderIn : Tag> RenderIn.routeInternal(
-    component: AdvancedComponent<*,*>,
+    component: AdvancedComponent<*, *>,
     cb : WithRouting<RenderIn>.()->Unit
 ){
     if(component.context[routingContextIdentifier] == null) throw IllegalStateException("Cannot start routing outside of a routing context.")
@@ -72,13 +86,13 @@ internal fun <RenderIn : Tag> RenderIn.routeInternal(
 }
 
 internal fun <RenderIn : Tag> RenderIn.doRouting(
-    component: AdvancedComponent<*,*>,
+    component: AdvancedComponent<*, *>,
     cb : WithRouting<RenderIn>.()->Unit
 ){
     component.run {
         //Run in render block for efficiency + to permanently capture routing context
         renderWithNewComponent { component ->
-            val routing = WithRouting(component, this)
+            val routing = WithRouting(component, this@renderWithNewComponent)
             cb(routing)
             routing.finish()
         }
@@ -106,6 +120,16 @@ class WithRouting<RenderIn : Tag>(
     fun match(pathPart : String, cb : RenderFunction<RenderIn>) {
         match({
             it != null && it == pathPart
+        }, cb)
+    }
+    fun match(page : RoutedPage, cb : RenderFunction<RenderIn>) {
+        match({
+            it == page.path || (page.path == null && it?.isEmpty() ?: true)
+        }, cb)
+    }
+    fun match(path : RoutedPath<*>, cb : RenderFunction<RenderIn>) {
+        match({
+            it != null && it == path.path
         }, cb)
     }
     fun match(matcher : (String?)->Boolean, cb : RenderFunction<RenderIn>) {
@@ -143,7 +167,20 @@ class WithRouting<RenderIn : Tag>(
     }
 }
 
-class UrlInfo(pathInfo : String?, queryString : String?){
-    val pathInfo = pathInfo ?: ""
-    val queryString = queryString ?: ""
+interface UrlInfo {
+    val pathSegments : Sequence<String>
+    val queryParams : Sequence<Pair<String,String>>
+
+    companion object {
+        fun of(pathInfo : String?, queryString : String?) : UrlInfo = ParseUrlInfo(pathInfo, queryString)
+    }
+}
+
+private class BasicUrlInfo(
+    override val pathSegments: Sequence<String>,
+    override val queryParams: Sequence<Pair<String, String>>
+) : UrlInfo
+private class ParseUrlInfo(pathInfo : String?, queryString : String?) : UrlInfo {
+    override val pathSegments by lazy { URLEncodedUtils.parsePathSegments(pathInfo ?: "").asSequence() }
+    override val queryParams by lazy { URLEncodedUtils.parse(queryString, Charset.defaultCharset()).asSequence().map { it.name to it.value } }
 }

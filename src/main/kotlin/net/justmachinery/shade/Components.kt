@@ -9,6 +9,7 @@ import net.justmachinery.shade.render.ComponentRenderState
 import net.justmachinery.shade.render.RenderTreeRecorderConsumer
 import net.justmachinery.shade.render.addComponent
 import net.justmachinery.shade.render.toRenderTreeTagLocation
+import net.justmachinery.shade.routing.*
 import java.lang.reflect.ParameterizedType
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.CoroutineContext
@@ -157,12 +158,22 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
     //a fresh component receiver for the passed-in function.
     private fun realComponentThis() = this.renderState.renderingFunction ?: this
 
-
-    //Useful helper functions and aliases
-    fun <RenderIn : Tag> RenderIn.startRouting(pathInfo : String, queryString : String, cb : WithRouting<RenderIn>.()->Unit) = startRouting(UrlInfo(pathInfo, queryString), cb)
+    //Routing functions
+    fun <RenderIn : Tag> RenderIn.dispatch(router : Router<RenderIn>) {
+        route {
+            router.dispatch(realComponentThis(), this@route)
+        }
+    }
+    fun <RenderIn : Tag> RenderIn.startDispatching(urlInfo: UrlInfo, router : Router<RenderIn>)  {
+        startRouting(urlInfo) {
+            router.dispatch(realComponentThis(), this@startRouting)
+        }
+    }
     fun <RenderIn : Tag> RenderIn.startRouting(urlInfo: UrlInfo, cb : WithRouting<RenderIn>.()->Unit) = startRoutingInternal(realComponentThis(), urlInfo, cb)
     fun <RenderIn : Tag> RenderIn.route(cb : WithRouting<RenderIn>.()->Unit) = routeInternal(realComponentThis(), cb)
 
+
+    //Useful helper functions and aliases
     fun <R,T> addContext(identifier: ComponentContextIdentifier<R>, value : R, cb : ()->T) = context.add(arrayOf(ComponentContextValue(identifier, value)), cb)
     fun <T> addContext(vararg values : ComponentContextValue<*>, cb: ()->T) = context.add(values, cb)
 

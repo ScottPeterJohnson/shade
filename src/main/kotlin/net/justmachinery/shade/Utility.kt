@@ -61,7 +61,7 @@ fun HtmlBlockTag.applyJs(
 
 data class Json(val raw : String)
 
-internal fun <T1: Any, T2: Any> List<T1>.zipAll(other: List<T2>): List<Pair<T1?, T2?>> {
+internal fun <T1: Any, T2: Any> Sequence<T1>.zipAll(other: Sequence<T2>): Sequence<Pair<T1?, T2?>> {
     val i1 = this.iterator()
     val i2 = other.iterator()
     return generateSequence {
@@ -71,7 +71,7 @@ internal fun <T1: Any, T2: Any> List<T1>.zipAll(other: List<T2>): List<Pair<T1?,
         } else {
             null
         }
-    }.toList()
+    }
 }
 
 
