@@ -18,7 +18,7 @@ abstract class Router<RenderIn : Tag> {
  * Properties of type RoutedPath and RoutedPage are used to generate a Router based on annotations.
  * The specific Contents of RoutedPaths are recursively entered to define a path hierarchy.
  */
-abstract class RoutingSpec {
+abstract class RoutingSpec : QueryParamSpec {
     /**
      * A path is intermediate; in /foo/bar/baz it could be either foo or bar, but not baz.
      * The [Contents] type may contain more subpaths or pages.
@@ -28,8 +28,10 @@ abstract class RoutingSpec {
     /**
      * An endpoint in routing.
      */
-    fun page(path : String) = RoutedPage(path)
-    fun indexPage() = RoutedPage(null)
+    fun <T : QueryParamSpec> page(path : String, spec : T) = RoutedPage(path, spec)
+    fun page(path : String) = RoutedPage(path, NoQueryParameters)
+    fun <T : QueryParamSpec> indexPage(spec : T) = RoutedPage(null, spec)
+    fun indexPage() = RoutedPage(null, NoQueryParameters)
 }
 
 abstract class RoutingSpecBase : RoutingSpec() {
@@ -40,8 +42,10 @@ abstract class RoutingSpecBase : RoutingSpec() {
     open val appendBasePath : String? = null
 }
 
-class RoutedPage(val path : String?)
+class RoutedPage<QueryParams : QueryParamSpec>(val path : String?, val contents: QueryParams)
 class RoutedPath<Contents>(val path : String, val contents : Contents)
+
+
 
 /**
  * A fully finished route, ready to be turned into a string or navigated to.
@@ -79,5 +83,5 @@ class RouteBeingBuilt(
     val segment : String? = null,
     val queryParams : Map<String, String> = emptyMap()
 ){
-    fun withAddedPath(path : String?) = RouteBeingBuilt(previous = this, segment = path, queryParams = emptyMap())
+    fun next(path : String?, params : Map<String,String>) = RouteBeingBuilt(previous = this, segment = path, queryParams = params)
 }

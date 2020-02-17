@@ -99,3 +99,22 @@ internal class SingleConcurrentExecution(private val launch : ()-> Job){
         }
     }
 }
+
+internal fun <T1: Any, T2: Any, T3 : Any> MutableMap<T1,T2>.mergeMut(other: Sequence<Pair<T1,T3>>, cb : (key : T1, existing: T2?, new: T3?)->T2?) {
+    val otherMap = other.toMap(mutableMapOf())
+    val iter = this.entries.iterator()
+    while(iter.hasNext()){
+        val entry = iter.next()
+        val otherValue = otherMap.remove(entry.key)
+        val result = cb(entry.key, entry.value, otherValue)
+        if(result == null){
+            iter.remove()
+        } else {
+            entry.setValue(result)
+        }
+    }
+    otherMap.entries.forEach {
+        val value = cb(it.key, null, it.value)
+        if(value != null) { this[it.key] = value }
+    }
+}

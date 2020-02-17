@@ -8,7 +8,13 @@ import java.nio.charset.Charset
 
 class PathData {
     var pathParts : List<ObservableValue<String>> = emptyList()
-    var queryParams : Map<String, ObservableValue<String?>> = emptyMap()
+    private var queryParams : MutableMap<String, ObservableValue<String?>> = mutableMapOf()
+
+    fun getParam(name : String): ObservableValue<String?> {
+        return synchronized(queryParams){
+            queryParams.getOrPut(name){ ObservableValue(null) }
+        }
+    }
 
     internal fun update(urlInfo: UrlInfo){
         val newQueryParams = urlInfo.queryParams
@@ -27,18 +33,16 @@ class PathData {
             }
         }.toList()
 
-        queryParams = newQueryParams.associateBy(
-            { it.first },
-            { (name, value) ->
-                val existing = queryParams[name]
+        synchronized(queryParams){
+            queryParams.mergeMut(newQueryParams){ _, existing, new ->
                 if(existing != null){
-                    existing.set(value)
+                    existing.set(new)
                     existing
                 } else {
-                    ObservableValue<String?>(value)
+                    ObservableValue(new)
                 }
             }
-        )
+        }
     }
 }
 
@@ -47,13 +51,6 @@ data class RoutingContext(
     internal var currentPathSegment : Int = 0
 ){
     fun currentPathFragment() = pathData.pathParts.getOrNull(currentPathSegment)
-
-    fun remainingUrlInfo() : UrlInfo = BasicUrlInfo(
-        pathSegments = pathData.pathParts.asSequence().drop(currentPathSegment).map { it.get() },
-        queryParams = pathData.queryParams.entries.asSequence().mapNotNull { (key, value) ->
-            value.get()?.let { key to it }
-        }
-    )
 
     companion object {
         fun get(component: AdvancedComponent<*, *>) = component.context[routingContextIdentifier]
@@ -110,6 +107,7 @@ class WithRouting<RenderIn : Tag>(
 
     private val routingContext = component.context[routingContextIdentifier]!!
     fun currentPathPart() = routingContext.currentPathFragment()?.get()
+    fun queryParam(name : String) = routingContext.pathData.getParam(name)
 
     fun matchRoot(cb : RenderFunction<RenderIn>) {
         match({
@@ -122,7 +120,7 @@ class WithRouting<RenderIn : Tag>(
             it != null && it == pathPart
         }, cb)
     }
-    fun match(page : RoutedPage, cb : RenderFunction<RenderIn>) {
+    fun match(page : RoutedPage<*>, cb : RenderFunction<RenderIn>) {
         match({
             it == page.path || (page.path == null && it?.isEmpty() ?: true)
         }, cb)
@@ -165,6 +163,8 @@ class WithRouting<RenderIn : Tag>(
             }
         }
     }
+
+    fun getParam(name : String) : ObservableValue<String?> = routingContext.pathData.getParam(name)
 }
 
 interface UrlInfo {

@@ -3,6 +3,7 @@ package net.justmachinery.shade.routing
 import com.squareup.kotlinpoet.*
 import kotlinx.html.Tag
 import net.justmachinery.shade.AdvancedComponent
+import net.justmachinery.shade.ObservableValue
 import java.io.File
 import javax.annotation.processing.*
 import javax.lang.model.SourceVersion
@@ -13,6 +14,8 @@ import javax.lang.model.type.TypeMirror
 import javax.lang.model.util.ElementFilter
 import javax.tools.Diagnostic
 import kotlin.reflect.KClass
+import kotlin.reflect.jvm.internal.impl.builtins.jvm.JavaToKotlinClassMap
+import kotlin.reflect.jvm.internal.impl.name.FqName
 
 
 const val KAPT_KOTLIN_GENERATED_OPTION_NAME = "kapt.kotlin.generated"
@@ -57,63 +60,157 @@ class AnnotationRoutingProcessor : AbstractProcessor() {
     ) : RouteData {
         val fields = ElementFilter.fieldsIn(element.enclosedElements)
 
-        val pages = mutableListOf<String>()
+        val pages = mutableListOf<PageData>()
         val paths = mutableListOf<PathRouteData>()
+        val queryParameters = mutableListOf<QueryParameterData>()
 
         fields.forEach { field ->
-            val fieldClazz = field.asType().extractRoutingType()
+            val fieldClazz = field.asType().extractPathContentType()
             if(fieldClazz != null){
                 val result = buildRoutingData(fieldClazz)
                 paths.add(PathRouteData(data = result, name = field.simpleName.toString()))
             }
             if(field.asType().isRoutingPage()){
-                pages.add(field.simpleName.toString())
+                val queryParamSpec = field.asType().extractQueryParameterSpecFromPageType()
+                pages.add(PageData(
+                    name = field.simpleName.toString(),
+                    queryParameters = queryParamSpec ?.let { extractQueryParameters(it) } ?: emptyList()
+                ))
+            }
+            if(field.asType().isQueryParameter()){
+                queryParameters.add(QueryParameterData(
+                    name = field.simpleName.toString(),
+                    type = field.asType().extractQueryParameterType()!!
+                ))
             }
         }
         return RouteData(
             className = ClassName.bestGuess(element.toString()),
             pages = pages,
-            paths = paths
+            paths = paths,
+            queryParameters = queryParameters
         )
     }
 
+    private fun extractQueryParameters(target : Element) : List<QueryParameterData> {
+        val parameters = mutableListOf<QueryParameterData>()
+        val fields = ElementFilter.fieldsIn(target.enclosedElements)
+        fields.forEach { field ->
+            if(field.asType().isQueryParameter()){
+                parameters.add(QueryParameterData(
+                    name = field.simpleName.toString(),
+                    type = field.asType().extractQueryParameterType()!!
+                ))
+            }
+        }
+        return parameters
+    }
+
+    private fun TypeMirror.isQueryParameter() : Boolean {
+        return this.findSuperclass(QueryParam::class) != null
+    }
+    private fun TypeMirror.extractQueryParameterType() : TypeName? {
+        return this.findSuperclass(QueryParam::class)?.let {
+            var result = (it.typeArguments[0] as DeclaredType).asTypeName()
+            if(this.findSuperclass(OptionalParam::class) != null){
+                result = result.copy(nullable = true)
+            }
+            result.javaToKotlinType()
+        }
+    }
 
     private fun TypeMirror.isRoutingPage() : Boolean {
-        val clazz = (this as? DeclaredType) ?: return false
-        return clazz.toString() == RoutedPage::class.qualifiedName
+        return this.findSuperclass(RoutedPage::class) != null
     }
-    private fun TypeMirror.extractRoutingType() : Element? {
+    private fun TypeMirror.extractQueryParameterSpecFromPageType() : Element? {
+        return this.findSuperclass(RoutedPage::class)?.let { (it.typeArguments[0] as DeclaredType).asElement() }
+    }
+    private fun TypeMirror.extractPathContentType() : Element? {
+        return this.findSuperclass(RoutedPath::class)?.let { (it.typeArguments[0] as DeclaredType).asElement() }
+    }
+    private fun TypeMirror.findSuperclass(target : KClass<*>) : DeclaredType? {
         val clazz = (this as? DeclaredType) ?: return null
-        return if(processingEnv.typeUtils.erasure(clazz).toString() == RoutedPath::class.qualifiedName){
-            (clazz.typeArguments[0] as DeclaredType).asElement()
+        val targetAsType = target.typeElement().erasure()
+        return if(typeUtils.isSameType(clazz.erasure(), targetAsType)){
+            clazz
         } else {
-            null
+            typeUtils.directSupertypes(clazz).asSequence().mapNotNull { it.findSuperclass(target) }.firstOrNull()
+        }
+    }
+
+    private val typeUtils get() = processingEnv.typeUtils
+    private fun KClass<*>.typeElement() = processingEnv.elementUtils.getTypeElement(qualifiedName).asType()
+    private fun TypeMirror.erasure() = typeUtils.erasure(this)
+
+    //TODO: might possibly need to read the metadata and do stupid things to get the right Kotlin types
+    /*private fun metadata(element : Element){
+        val metadata = element.getAnnotation(Metadata::class.java)
+        val header = KotlinClassHeader(
+            kind = metadata.kind,
+            metadataVersion = metadata.metadataVersion,
+            bytecodeVersion = metadata.bytecodeVersion,
+            data1 = metadata.data1,
+            data2 = metadata.data2,
+            extraString = metadata.extraString,
+            packageName = metadata.packageName,
+            extraInt = metadata.extraInt
+        )
+        val meta = KotlinClassMetadata.read(header)!! as KotlinClassMetadata.Class
+        ClassName.bestGuess(meta.toKmClass().name)
+        meta.toKmClass().name
+        meta.toKmClass().properties.forEach { property ->
+            property.name
+            property.returnType
+        }
+    }*/
+
+    //For now this seems to work:
+    private fun TypeName.javaToKotlinType(): TypeName {
+        return when (this) {
+            is ParameterizedTypeName -> {
+                ParameterizedTypeName.run {
+                    (rawType.javaToKotlinType() as ClassName).parameterizedBy(
+                        *(typeArguments.map { it.javaToKotlinType() }.toTypedArray())
+                    )
+                }
+            }
+            is WildcardTypeName -> {
+                outTypes[0].javaToKotlinType()
+            }
+            else -> {
+                val className = JavaToKotlinClassMap.INSTANCE.mapJavaToKotlin(FqName(toString()))?.asSingleFqName()?.asString()
+                return if (className == null) {
+                    this
+                } else {
+                    ClassName.bestGuess(className)
+                }
+            }
         }
     }
 }
 
-private data class RouteData(val className: ClassName, val pages : List<String>, val paths : List<PathRouteData>)
+private data class RouteData(
+    val className: ClassName,
+    val pages : List<PageData>,
+    val paths : List<PathRouteData>,
+    val queryParameters : List<QueryParameterData>
+)
 private data class PathRouteData(val data : RouteData, val name : String)
+private data class PageData(val name : String, val queryParameters : List<QueryParameterData>)
+private data class QueryParameterData(val name : String, val type: TypeName)
 
 private class AnnotationRoutingEmitter(val routeData: RouteData) {
     val builder = FileSpec.builder("net.justmachinery.shade.generated.routing", routeData.className.simpleName + "Routing")
     fun write(outputDirectory : File){
-        outputRouteBuilderFunction()
 
         outputRouterCallbackInterface(routeData, true)
         flushAddedClasses()
 
+        outputRouteBuilderFunction()
         outputRoutingBuilderClasses(routeData)
         flushAddedClasses()
 
         builder.build().writeTo(outputDirectory)
-    }
-
-    private fun outputRouteBuilderFunction(){
-        builder.addFunction(FunSpec.builder("build")
-            .receiver(routeData.className)
-            .addStatement("return %T(RouteBeingBuilt(segment = appendBasePath), this)", routeData.builderClassName())
-            .build())
     }
 
     private fun outputRouterCallbackInterface(data: RouteData, topLevel : Boolean){
@@ -134,24 +231,58 @@ private class AnnotationRoutingEmitter(val routeData: RouteData) {
         }
 
 
-        data.pages.forEach {
-            type.addFunction(FunSpec.builder(it)
+        data.pages.forEach { pageData ->
+            val func = FunSpec.builder(pageData.name)
                 .addModifiers(KModifier.ABSTRACT)
                 .receiver(TypeVariableName("RenderIn"))
-                .build())
+            if(pageData.queryParameters.isNotEmpty()){
+                val holder = outputQueryParamsHolder(type, data.paramClassName(pageData.name), pageData.queryParameters)
+                func.addParameter("params", holder)
+            }
+            type.addFunction(func.build())
         }
 
-        data.paths.forEach {
-            outputRouterCallbackInterface(it.data, false)
-            type.addFunction(FunSpec.builder(it.name)
+        data.paths.forEach { pathData ->
+            outputRouterCallbackInterface(pathData.data, false)
+            val func = FunSpec.builder(pathData.name)
                 .addModifiers(KModifier.ABSTRACT)
-                .returns(it.data.routerClassName().parameterizedBy(renderIn))
-                .build())
+                .returns(pathData.data.routerClassName().parameterizedBy(renderIn))
+            if(pathData.data.queryParameters.isNotEmpty()){
+                val holder = outputQueryParamsHolder(type, data.paramClassName(pathData.name), pathData.data.queryParameters)
+                func.addParameter("params", holder)
+            }
+            type.addFunction(func.build())
         }
 
         outputDispatchFunction(data, type, topLevel)
 
         reversedAddClasses[typeName] = type.build()
+    }
+
+
+    private fun outputQueryParamsHolder(
+        addTo : TypeSpec.Builder,
+        name : ClassName,
+        params : List<QueryParameterData>
+    ) : ClassName {
+        val spec = TypeSpec.classBuilder(name)
+        val constructor = FunSpec.constructorBuilder()
+
+        params.forEach { param ->
+            constructor.addParameter(param.name, ObservableValue::class.parameterizedBy(String::class.asTypeName().copy(nullable = true)))
+            constructor.addParameter(param.name + "_spec", QueryParam::class.parameterizedBy(param.type))
+            spec.addProperty(
+                PropertySpec.builder(param.name, param.type)
+                    .delegate("%M(lazy = false){ ${param.name}_spec.tryParse(${param.name}.value) }", MemberName("net.justmachinery.shade", "computed"))
+                    .build())
+            Unit
+        }
+
+        spec.primaryConstructor(constructor.build())
+
+        addTo.addType(spec.build())
+
+        return name
     }
 
 
@@ -165,18 +296,43 @@ private class AnnotationRoutingEmitter(val routeData: RouteData) {
         func.beginControlFlow("component.run")
         func.beginControlFlow("withRouting.run")
 
-        data.pages.forEach {
-            func.beginControlFlow("match(spec.$it)")
-            func.addStatement("$it()")
+        data.pages.forEach { pageData ->
+            func.beginControlFlow("run")
+            func.addStatement("val specPage = spec.${pageData.name}")
+            pageData.queryParameters.forEach {
+                func.addStatement("val ${it.name} = getParam(specPage.contents.${it.name}.name)")
+            }
+            func.beginControlFlow("match(specPage)")
+            if(pageData.queryParameters.isNotEmpty()){
+                val params = pageData.queryParameters.joinToString(", "){
+                    "${it.name}, specPage.contents.${it.name}"
+                }
+                func.addStatement("${pageData.name}(%T($params))", data.paramClassName(pageData.name))
+            } else {
+                func.addStatement("${pageData.name}()")
+            }
+            func.endControlFlow()
             func.endControlFlow()
         }
-        data.paths.forEach {
-            val name = it.name
-            func.addStatement("val next = spec.$name")
-            func.beginControlFlow("match(next)")
+        data.paths.forEach { pathData ->
+            val name = pathData.name
+            func.beginControlFlow("run")
+            func.addStatement("val specNext = spec.$name")
+            pathData.data.queryParameters.forEach {
+                func.addStatement("val ${it.name} = getParam(specNext.contents.${it.name}.name)")
+            }
+            func.beginControlFlow("match(specNext)")
             func.beginControlFlow("route")
-                func.addStatement("val instance = $name()")
-                func.addStatement("instance.dispatch(component, this, next.contents)")
+                if(pathData.data.queryParameters.isNotEmpty()){
+                    val params = pathData.data.queryParameters.joinToString(", "){
+                        "${it.name}, specNext.contents.${it.name}"
+                    }
+                    func.addStatement("val instance = ${name}(%T($params))", data.paramClassName(pathData.name))
+                } else {
+                    func.addStatement("val instance = $name()")
+                }
+                func.addStatement("instance.dispatch(component, this, specNext.contents)")
+            func.endControlFlow()
             func.endControlFlow()
             func.endControlFlow()
         }
@@ -186,19 +342,52 @@ private class AnnotationRoutingEmitter(val routeData: RouteData) {
         type.addFunction(func.build())
     }
 
-    private fun ClassName.parameterizedBy(vararg args : TypeName) = ParameterizedTypeName.run { this@parameterizedBy.parameterizedBy(*args) }
-    private fun KClass<*>.parameterizedBy(vararg args : TypeName) = this.asClassName().parameterizedBy(*args)
 
-    //We traverse depth first, but output breadth first for a cleaner generated file
-    private val reversedAddClasses = LinkedHashMap<ClassName, TypeSpec>()
-    private fun flushAddedClasses() {
-        reversedAddClasses.values.reversed().forEach { builder.addType(it) }
-        reversedAddClasses.clear()
+
+
+    private fun outputRouteBuilderFunction(){
+        val funSpec = FunSpec.builder("build")
+        constructRouteBuilderFunction(
+            funSpec = funSpec,
+            createSpec = "this",
+            resultType = routeData.builderClassName(),
+            params = routeData.queryParameters,
+            parameterTemplate = { "RouteBeingBuilt(segment = appendBasePath, queryParams = $it), spec" },
+            alwaysCreateSpec = true
+        )
+        funSpec.receiver(routeData.className)
+        builder.addFunction(funSpec.build())
     }
 
-    private fun RouteData.routerClassName() = suffixClassName("Router")
-    private fun RouteData.builderClassName() = suffixClassName("Builder")
-    private fun RouteData.suffixClassName(suffix : String) = ClassName(builder.packageName, this.className.simpleName + suffix)
+    private fun constructRouteBuilderFunction(
+        funSpec : FunSpec.Builder,
+        resultType : TypeName,
+        createSpec : String,
+        params : List<QueryParameterData>,
+        parameterTemplate : (String)->String,
+        alwaysCreateSpec : Boolean
+    ) {
+        funSpec.returns(resultType)
+
+        if(alwaysCreateSpec || params.isNotEmpty()){
+            funSpec.addStatement("val spec = $createSpec")
+        }
+
+        val queryParamMap = if(params.isEmpty()) "emptyMap()" else {
+            val serializedQueryParams = params.joinToString(", ") { "spec.${it.name}.name to spec.${it.name}.serialize(${it.name})" }
+            "mapOf($serializedQueryParams)"
+        }
+
+        params.forEach {
+            val spec = ParameterSpec.builder(it.name, it.type)
+            if(it.type.isNullable){
+                spec.defaultValue("null")
+            }
+            funSpec.addParameter(spec.build())
+        }
+
+        funSpec.addStatement("return %T(${parameterTemplate(queryParamMap)})", resultType)
+    }
 
     private fun outputRoutingBuilderClasses(
         routeData: RouteData
@@ -213,18 +402,31 @@ private class AnnotationRoutingEmitter(val routeData: RouteData) {
 
         routeData.paths.forEach { subPath ->
             val resultName = outputRoutingBuilderClasses(subPath.data)
+
             val routeMethod = FunSpec.builder(subPath.name)
-            routeMethod.returns(resultName)
             routeMethod.addStatement("val next = spec.${subPath.name}")
-            routeMethod.addStatement("return %T(routeBeingBuilt.withAddedPath(next.path), next.contents)", resultName)
+            constructRouteBuilderFunction(
+                funSpec = routeMethod,
+                resultType = resultName,
+                createSpec = "next.contents",
+                params = subPath.data.queryParameters,
+                parameterTemplate = { "routeBeingBuilt.next(next.path, $it), spec" },
+                alwaysCreateSpec = true
+            )
             clazz.addFunction(routeMethod.build())
         }
 
         routeData.pages.forEach { page ->
-            val pageMethod = FunSpec.builder(page)
-            pageMethod.returns(FinishedRoute::class.asTypeName())
-            pageMethod.addStatement("val next = spec.${page}")
-            pageMethod.addStatement("return %T(routeBeingBuilt.withAddedPath(next.path))", FinishedRoute::class)
+            val pageMethod = FunSpec.builder(page.name)
+            pageMethod.addStatement("val next = spec.${page.name}")
+            constructRouteBuilderFunction(
+                funSpec = pageMethod,
+                createSpec = "next.contents",
+                params = page.queryParameters,
+                resultType = FinishedRoute::class.asTypeName(),
+                parameterTemplate = { "routeBeingBuilt.next(next.path, $it)" },
+                alwaysCreateSpec = false
+            )
             clazz.addFunction(pageMethod.build())
         }
 
@@ -232,6 +434,8 @@ private class AnnotationRoutingEmitter(val routeData: RouteData) {
 
         return name
     }
+
+    //Utils
 
     private fun FunSpec.Builder.addPropertyParameter(clazz : TypeSpec.Builder, name : String, type : TypeName) : FunSpec.Builder {
         this.addParameter(name, type)
@@ -243,4 +447,20 @@ private class AnnotationRoutingEmitter(val routeData: RouteData) {
         )
         return this
     }
+
+    private fun ClassName.parameterizedBy(vararg args : TypeName) = ParameterizedTypeName.run { this@parameterizedBy.parameterizedBy(*args) }
+    private fun KClass<*>.parameterizedBy(vararg args : TypeName) = this.asClassName().parameterizedBy(*args)
+
+    //We traverse depth first, but output breadth first for a cleaner generated file
+    private val reversedAddClasses = LinkedHashMap<ClassName, TypeSpec>()
+    private fun flushAddedClasses() {
+        reversedAddClasses.values.reversed().forEach { builder.addType(it) }
+        reversedAddClasses.clear()
+    }
+
+
+    private fun RouteData.paramClassName(node : String) = routerClassName().nestedClass(node.capitalize() + "Params")
+    private fun RouteData.routerClassName() = suffixClassName("Router")
+    private fun RouteData.builderClassName() = suffixClassName("Builder")
+    private fun RouteData.suffixClassName(suffix : String) = ClassName(builder.packageName, this.className.simpleName + suffix)
 }

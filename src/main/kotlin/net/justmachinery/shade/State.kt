@@ -7,7 +7,7 @@ import kotlin.reflect.KProperty
 
 fun <T> react(value: T) = ObservableValue(value)
 fun <T> observable(value: T) = ObservableValue(value)
-fun <T> computed(block: () -> T) = ComputedValue(block)
+fun <T> computed(lazy : Boolean = true, block: () -> T) = ComputedValue(block, lazy)
 fun reaction(block: () -> Unit) = Reaction(block)
 fun <T> action(block: () -> T) = runChangeBatch(false, block)
 
@@ -195,7 +195,8 @@ class ObservableValue<T>(
 }
 
 class ComputedValue<T>(
-    private val computed: () -> T
+    private val computed: () -> T,
+    lazy : Boolean = true
 ) : ReactiveObserver() {
     private val atom = Atom()
 
@@ -205,6 +206,12 @@ class ComputedValue<T>(
     val observers get() = atom.observers
     override val observing = mutableSetOf<Atom>()
 
+    init {
+        if(!lazy){
+            computeInternal()
+        }
+    }
+
     fun isDirty() = dirty
     fun markDirty(){
         synchronized(this){
@@ -213,9 +220,15 @@ class ComputedValue<T>(
         }
     }
 
-    private fun computeInternal() {
+    private fun doComputeInternal() {
         value = computed()
         dirty = false
+    }
+
+    private fun computeInternal(){
+        synchronized(this){
+            this.runRecordingDependencies(this::doComputeInternal)
+        }
     }
 
     fun get(): T {
@@ -224,7 +237,7 @@ class ComputedValue<T>(
         if(dirty){
             synchronized(this){
                 if(dirty){
-                    this.runRecordingDependencies(this::computeInternal)
+                    computeInternal()
                 }
             }
         }
