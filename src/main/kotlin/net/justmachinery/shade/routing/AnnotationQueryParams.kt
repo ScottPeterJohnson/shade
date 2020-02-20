@@ -43,7 +43,6 @@ interface QueryParam<T> {
     }
 }
 
-open class RoutingException(message : String) : RuntimeException(message)
 open class QueryParamException(message : String) : RoutingException(message)
 class QueryParamNotFoundException(val name : String) : QueryParamException("Param not found: $name")
 class QueryParamParseException(val name : String, val value : String) : QueryParamException("Could not parse param $name from \"$value\"")

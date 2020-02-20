@@ -101,7 +101,7 @@ internal class SingleConcurrentExecution(private val launch : ()-> Job){
 }
 
 internal fun <T1: Any, T2: Any, T3 : Any> MutableMap<T1,T2>.mergeMut(other: Sequence<Pair<T1,T3>>, cb : (key : T1, existing: T2?, new: T3?)->T2?) {
-    val otherMap = other.toMap(mutableMapOf())
+    val otherMap = other.toMap(HashMap())
     val iter = this.entries.iterator()
     while(iter.hasNext()){
         val entry = iter.next()

@@ -20,7 +20,7 @@ class ComponentContextValue<T>(val identifier : ComponentContextIdentifier<T>, v
 
 class ComponentContext(
     private val parent : ComponentContext?,
-    private val backing : MutableMap<ComponentContextIdentifier<*>, Any?> = mutableMapOf()
+    private val backing : MutableMap<ComponentContextIdentifier<*>, Any?> = HashMap(0)
 ) {
     @Suppress("UNCHECKED_CAST")
     operator fun <K> get(key : ComponentContextIdentifier<K>) : K? {
@@ -38,7 +38,7 @@ class ComponentContext(
         return withComponentContext(
             context = ComponentContext(
                 parent = this,
-                backing =  values.asSequence().map { Pair(it.identifier, it.value) }.toMap(mutableMapOf())
+                backing = values.asSequence().map { Pair(it.identifier, it.value) }.toMap(HashMap(values.size))
             ),
             cb = cb
         )

@@ -192,6 +192,8 @@ class ObservableValue<T>(
     var value: T
         get() = get()
         set(value) = set(value)
+
+    fun isObserved() = atom.isObserved()
 }
 
 class ComputedValue<T>(

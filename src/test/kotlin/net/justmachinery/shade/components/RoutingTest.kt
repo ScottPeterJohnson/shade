@@ -13,7 +13,10 @@ import net.justmachinery.shade.routing.RoutingSpecBase
 class RoutingTest : Component<Unit>(){
     override fun HtmlBlockTag.render() {
         h2 { +"Routing" }
-        a(href = "routing"){ +"Click here to go to a routing page" }
+        a{
+            navigate = TestRoutingSpec.build().index()
+            +"Click here to go to a routing page"
+        }
     }
 }
 
@@ -78,7 +81,10 @@ class RoutingDemoPage : Component<Unit>() {
             TestRoutingSpec.build().user(id = 49)
         ).forEach { route ->
             div {
-                a(href = route.render()){ +route.render() }
+                a(){
+                    navigate = route
+                    +route.render()
+                }
             }
         }
     }

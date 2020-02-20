@@ -156,11 +156,13 @@ internal fun unmountDiffInRenderTrees(oldRoot : RenderTreeLocation, newRoot : Re
     }
 }
 
-private fun unmountAll(root : RenderTreeLocation){
+internal fun unmountAll(root : RenderTreeLocation){
     root.children.forEach {
         when (it) {
             is RenderTreeChild.TagChild -> unmountAll(it.child)
-            is RenderTreeChild.ComponentChild -> it.component.doUnmount()
+            is RenderTreeChild.ComponentChild -> {
+                it.component.doUnmount()
+            }
         }
     }
 }

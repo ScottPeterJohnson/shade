@@ -5,10 +5,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.html.*
 import mu.KLogging
-import net.justmachinery.shade.render.ComponentRenderState
-import net.justmachinery.shade.render.RenderTreeRecorderConsumer
-import net.justmachinery.shade.render.addComponent
-import net.justmachinery.shade.render.toRenderTreeTagLocation
+import net.justmachinery.shade.render.*
 import net.justmachinery.shade.routing.*
 import java.lang.reflect.ParameterizedType
 import java.util.concurrent.ConcurrentHashMap
@@ -127,10 +124,17 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
         }
     }
     internal fun doUnmount(){
+        renderState.renderTreeRoot?.let {
+            unmountAll(it)
+        }
+
+        client.markDontRerender(this)
         renderDependencies.dispose()
         supervisorJob.cancel()
+
         client.swallowExceptions {
             maybeHandleExceptions(message = { "While unmounting" }){
+                //Unmount children
                 unmounted()
             }
         }
@@ -159,24 +163,62 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
     private fun realComponentThis() = this.renderState.renderingFunction ?: this
 
     //Routing functions
+    /**
+     * Dispatch to a router based on any remaining path segments in the current routing context.
+     */
     fun <RenderIn : Tag> RenderIn.dispatch(router : Router<RenderIn>) {
         route {
             router.dispatch(realComponentThis(), this@route)
         }
     }
-    fun <RenderIn : Tag> RenderIn.startDispatching(urlInfo: UrlInfo, router : Router<RenderIn>)  {
-        startRouting(urlInfo) {
+
+    /**
+     * Create a new routing context and dispatch it to a router.
+     * See [startRouting]
+     */
+    fun <RenderIn : Tag> RenderIn.startDispatching(urlInfo: UrlInfo, urlTransform: (UrlInfo) -> UrlInfo, router : Router<RenderIn>)  {
+        startRouting(urlInfo, urlTransform) {
             router.dispatch(realComponentThis(), this@startRouting)
         }
     }
-    fun <RenderIn : Tag> RenderIn.startRouting(urlInfo: UrlInfo, cb : WithRouting<RenderIn>.()->Unit) = startRoutingInternal(realComponentThis(), urlInfo, cb)
+
+    /**
+     * Create a new routing context and begin matching on it.
+     * The [urlInfo] passed should contain the full path (not including the scheme or host e.g. https), and query parameters
+     * not including "?".
+     * Provide a [urlTransform] function to transform the URL to one to be routed on by e.g. removing a prefix from the path.
+     * This transform will apply to URLs updated from the client.
+     */
+    fun <RenderIn : Tag> RenderIn.startRouting(urlInfo: UrlInfo, urlTransform : (UrlInfo)->UrlInfo, cb : WithRouting<RenderIn>.()->Unit) = startRoutingInternal(realComponentThis(), urlInfo, urlTransform, cb)
+
+    /**
+     * Route within remaining path segments in the current routing context.
+     */
     fun <RenderIn : Tag> RenderIn.route(cb : WithRouting<RenderIn>.()->Unit) = routeInternal(realComponentThis(), cb)
 
+    fun FinishedRoute.navigate(){
+        this.navigate(realComponentThis())
+    }
+    var A.navigate : FinishedRoute?
+        get() = throw NotImplementedError()
+        set(value){
+            routingSetNavigate(realComponentThis(), this, value)
+        }
 
     //Useful helper functions and aliases
+    /**
+     * Adds a context value to any components created within the cb() block
+     */
     fun <R,T> addContext(identifier: ComponentContextIdentifier<R>, value : R, cb : ()->T) = context.add(arrayOf(ComponentContextValue(identifier, value)), cb)
+
+    /**
+     * See [addContext]
+     */
     fun <T> addContext(vararg values : ComponentContextValue<*>, cb: ()->T) = context.add(values, cb)
 
+    /**
+     * See [add]
+     */
     fun <Props : PropsType<Props, T>, T : AdvancedComponent<Props, RenderIn>, RenderIn : Tag> RenderIn.add(pr : Props, key : String? = null) =
         @Suppress("UNCHECKED_CAST")
         addComponent(
@@ -188,7 +230,16 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
             key = key
         )
 
+    /**
+     * See [add]
+     */
     fun <RenderIn : Tag> RenderIn.add(component : KClass<out AdvancedComponent<Unit, RenderIn>>, key : String? = null) = add(component, Unit, key)
+
+    /**
+     * Adds a component at this point in the render tree, with the given component class and props.
+     * During the execution of a render function this may either create a new component (always on first render),
+     * or reuse an existing one.
+     */
     fun <Props : Any, RenderIn : Tag> RenderIn.add(component : KClass<out AdvancedComponent<Props, RenderIn>>, props : Props, key : String? = null) =
         @Suppress("UNCHECKED_CAST")
         addComponent(

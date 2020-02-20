@@ -16,7 +16,7 @@ class RootComponent : Component<UrlInfo /* Takes a single prop; the page URL */>
     override fun HtmlBlockTag.render() {
         //First we'll just do some top-level routing, to show different pages per different URLs.
         //This is the basic routing API; see the RoutingDemoPage for a more thorough explanation.
-        startRouting(props){
+        startRouting(urlInfo = props, urlTransform = { it }){
             match("test"){
                 route {
                     matchRoot {

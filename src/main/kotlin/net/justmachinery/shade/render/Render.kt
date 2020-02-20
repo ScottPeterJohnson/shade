@@ -32,7 +32,7 @@ internal data class ComponentRenderState(
 internal fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.renderInternal(tag : RenderIn, addMarkers : Boolean){
     val oldRenderCallbackIds = renderState.lastRenderCallbackIds
     renderState.lastRenderCallbackIds = TreeSet()
-    client.markAlreadyRerendered(this)
+    client.markDontRerender(this)
     if(addMarkers) SCRIPT(listOfNotNull(
         "type" to "shade",
         "id" to "shade"+renderState.componentId.toString(),

@@ -39,8 +39,8 @@ class Client(
     /**
      * Used to avoid excessive rerender of a component when doing batched rendering, as its parent may rerender it.
      */
-    private var alreadyRerendered: MutableSet<AdvancedComponent<*,*>>? = null
-    internal fun markAlreadyRerendered(component : AdvancedComponent<*, *>){ alreadyRerendered?.add(component) }
+    private var dontRerender: MutableSet<AdvancedComponent<*,*>>? = null
+    internal fun markDontRerender(component : AdvancedComponent<*, *>){ dontRerender?.add(component) }
 
     /**
      * Flag components dirty, and queue a rerender
@@ -76,8 +76,8 @@ class Client(
      */
     private fun rerender() : Job = coroutineScope.launch {
         logging {
-            val rerendered = mutableSetOf<AdvancedComponent<*,*>>()
-            alreadyRerendered = rerendered
+            val rerendered = Collections.newSetFromMap<AdvancedComponent<*,*>>(WeakHashMap())
+            dontRerender = rerendered
             try {
                 //We render from the top of the tree hierarchy down, to avoid excessive rerenders when a parent and
                 //some child both depend on some state marked dirty.
@@ -96,7 +96,7 @@ class Client(
                     }
                 }
             } finally {
-                alreadyRerendered = null
+                dontRerender = null
             }
         }
     }
@@ -325,12 +325,23 @@ class Client(
         val wrappedData = if(data != null) ",JSON.stringify($data)" else ""
         return id to "javascript:(function(){ ${wrappedPrefix}window.shade($id$wrappedData)$wrappedSuffix })()"
     }
+
     fun executeScript(@Language("JavaScript 1.8") js : String) {
         sendJavascript(null, js)
     }
 
+    internal fun runRepeatableExpressionWithTemplate(@Language("JavaScript 1.8") template : (Long)->String, cb : (Json?)->Unit) {
+        val id = storeCallback(CallbackData(
+            callback = {
+                cb(it)
+            },
+            onError = null,
+            requireEventLock = true
+        ))
+        sendJavascript(id.toString(), template(id))
+    }
 
-    private fun runExpressionWithTemplate(template : (Long)->String) : CompletableDeferred<Json> {
+    private fun runOneoffExpressionWithTemplate(template : (Long)->String) : CompletableDeferred<Json> {
         val future = CompletableDeferred<Json>()
         var id : Long? = null
         id = storeCallback(CallbackData(
@@ -353,7 +364,7 @@ class Client(
      */
     fun runExpression(
         @Language("JavaScript 1.8", prefix = "var result = ", suffix = ";") js : String) : CompletableDeferred<Json> {
-        return runExpressionWithTemplate {id -> "var result = $js;\nwindow.shade($id, JSON.stringify(result))" }
+        return runOneoffExpressionWithTemplate { id -> "var result = $js;\nwindow.shade($id, JSON.stringify(result))" }
     }
 
     /**
@@ -361,7 +372,7 @@ class Client(
      * Call shadeCb(data) to return data, or shadeErr(error) to throw an exception.
      */
     fun runWithCallback(@Language("JavaScript 1.8", prefix = "function cb(data){}; ", suffix = ";") js : String) : CompletableDeferred<Json> {
-        return runExpressionWithTemplate {id -> "(function(){ function shadeErr(e){ sendIfError(e, $id, script.substring(0,256)) }; function shadeCb(data){ window.shade($id, JSON.stringify(data)) }; $js; })()" }
+        return runOneoffExpressionWithTemplate { id -> "(function(){ function shadeErr(e){ sendIfError(e, $id, script.substring(0,256)) }; function shadeCb(data){ window.shade($id, JSON.stringify(data)) }; $js; })()" }
     }
 
     /**
@@ -370,6 +381,23 @@ class Client(
      */
     fun runPromise(@Language("JavaScript 1.8", prefix = "var result = ", suffix = ";") js : String) : CompletableDeferred<Json> {
         return runWithCallback("var result = $js; result.then(shadeCb).catch(shadeErr);")
+    }
+
+    private val globalState = Collections.synchronizedMap(HashMap<GlobalClientStateIdentifier<*>, Any?>(0))
+    @Suppress("UNCHECKED_CAST")
+    fun <T> getGlobalState(identifier: GlobalClientStateIdentifier<T>) : T? {
+        synchronized(globalState){
+            return globalState[identifier] as T?
+        }
+    }
+    @Suppress("UNCHECKED_CAST")
+    fun <T> getOrPutGlobalState(identifier: GlobalClientStateIdentifier<T>, default : ()->T) : T {
+        synchronized(globalState){
+            return globalState.getOrPut(identifier, default) as T
+        }
+    }
+    fun <T> putGlobalState(identifier: GlobalClientStateIdentifier<T>, value : T) {
+        globalState[identifier] = value
     }
 }
 
@@ -389,3 +417,22 @@ class JavascriptExceptionDetails(
     val name : String,
     val stack : String
 )
+
+class GlobalClientStateIdentifier<T> {
+    companion object {
+        private val nextIdentifier = AtomicInteger(0)
+    }
+
+    private val identifier = nextIdentifier.getAndIncrement()
+    override fun hashCode(): Int {
+        return identifier
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+        other as GlobalClientStateIdentifier<*>
+        if (identifier != other.identifier) return false
+        return true
+    }
+}
