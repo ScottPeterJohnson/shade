@@ -177,7 +177,7 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
      * Create a new routing context and dispatch it to a router.
      * See [startRouting]
      */
-    fun <RenderIn : Tag> RenderIn.startDispatching(urlInfo: UrlInfo, urlTransform: (UrlInfo) -> UrlInfo, router : Router<RenderIn>)  {
+    fun <RenderIn : Tag> RenderIn.startDispatching(urlInfo: ExternalUrlInfo, urlTransform: (ExternalUrlInfo) -> InternalUrlInfo, router : Router<RenderIn>)  {
         startRouting(urlInfo, urlTransform) {
             router.dispatch(realComponentThis(), this@startRouting)
         }
@@ -190,7 +190,7 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
      * Provide a [urlTransform] function to transform the URL to one to be routed on by e.g. removing a prefix from the path.
      * This transform will apply to URLs updated from the client.
      */
-    fun <RenderIn : Tag> RenderIn.startRouting(urlInfo: UrlInfo, urlTransform : (UrlInfo)->UrlInfo, cb : WithRouting<RenderIn>.()->Unit) = startRoutingInternal(realComponentThis(), urlInfo, urlTransform, cb)
+    fun <RenderIn : Tag> RenderIn.startRouting(urlInfo: ExternalUrlInfo, urlTransform : (ExternalUrlInfo)->InternalUrlInfo, cb : WithRouting<RenderIn>.()->Unit) = startRoutingInternal(realComponentThis(), urlInfo, urlTransform, cb)
 
     /**
      * Route within remaining path segments in the current routing context.

@@ -48,6 +48,17 @@ class PathData {
     }
 }
 
+/**
+ * An "internal" path consists of path segments that must be matched on.
+ * An "external" path is a full path that a client will see.
+ * E.g. if you mount shade at /foo/bar/ and have subpaths baz, baz/bing to match, then:
+ * /foo/bar/baz is an external path, with a corresponding internal path of baz
+ * /foo/bar/baz/bing corresponds to baz/bing
+ * etc.
+ */
+typealias InternalUrlInfo = UrlInfo
+typealias ExternalUrlInfo = UrlInfo
+
 interface UrlInfo {
     val pathSegments : Sequence<String>
     val queryParams : Sequence<Pair<String,String>>
@@ -58,12 +69,31 @@ interface UrlInfo {
         fun of(pathInfo : String?, queryString : String?) : UrlInfo = ParseUrlInfo(pathInfo ?: "", queryString ?: "")
     }
 
+    /**
+     * Removes prefix from this URL's path if it contains all of prefix's segments
+     */
     fun removePathPrefix(prefix : String) : UrlInfo {
         val inf = pathInfo
         return if(inf.length > prefix.length && inf[prefix.length] != '/'){
             this
         } else {
             ParseUrlInfo(pathInfo.removePrefix(prefix), queryString)
+        }
+    }
+
+    fun addPathPrefix(prefix : String) : UrlInfo {
+        return ParseUrlInfo(
+            pathInfo = "$prefix${if (prefix.endsWith("/")) "" else "/"}$pathInfo",
+            queryString = queryString
+        )
+    }
+
+    fun render() : String {
+        val qs = queryString
+        return if(qs.isNotEmpty()){
+            "$pathInfo?$qs"
+        } else {
+            pathInfo
         }
     }
 }

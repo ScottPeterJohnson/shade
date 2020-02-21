@@ -352,7 +352,7 @@ private class AnnotationRoutingEmitter(val routeData: RouteData) {
             createSpec = "this",
             resultType = routeData.builderClassName(),
             params = routeData.queryParameters,
-            parameterTemplate = { "RouteBeingBuilt.fromBase(appendBasePath, $it), spec" },
+            parameterTemplate = { "RouteBeingBuilt.begin(spec, $it), spec" },
             alwaysCreateSpec = true
         )
         funSpec.receiver(routeData.className)

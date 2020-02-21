@@ -32,8 +32,8 @@ data class RoutingGlobalClientState(
 
 internal fun <RenderIn : Tag> RenderIn.startRoutingInternal(
     component: AdvancedComponent<*, *>,
-    urlInfo: UrlInfo,
-    urlTransform : (UrlInfo) -> UrlInfo = { it },
+    urlInfo: ExternalUrlInfo,
+    urlTransform : (ExternalUrlInfo) -> InternalUrlInfo = { it },
     cb : WithRouting<RenderIn>.()->Unit
 ) {
     val globalState = component.client.getOrPutGlobalState(routingGlobalClientStateIdentifier){
@@ -50,7 +50,7 @@ internal fun <RenderIn : Tag> RenderIn.startRoutingInternal(
     }
 }
 
-private fun installRoutingHandler(component: AdvancedComponent<*,*>, urlTransform: (UrlInfo) -> UrlInfo) : RoutingGlobalClientState {
+private fun installRoutingHandler(component: AdvancedComponent<*,*>, urlTransform: (ExternalUrlInfo) -> InternalUrlInfo) : RoutingGlobalClientState {
     val pathData = PathData()
     component.client.runRepeatableExpressionWithTemplate({
         "window.addEventListener('popstate', (event)=>{ window.shade($it, JSON.stringify({path:''+document.location.pathname, query:''+document.location.search}))})"
@@ -165,7 +165,7 @@ internal fun routingSetNavigate(component: AdvancedComponent<*, *>, anchor : A, 
         anchor.attributes.remove("href")
         anchor.attributes.remove("onclick")
     } else {
-        anchor.href = value.render()
+        anchor.href = value.asExternalUrl()
         component.run {
             anchor.onClick(suffix = "event.preventDefault()") {
                 value.navigate()

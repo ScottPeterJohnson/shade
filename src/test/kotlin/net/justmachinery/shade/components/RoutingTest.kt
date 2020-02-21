@@ -5,10 +5,7 @@ import net.justmachinery.shade.Component
 import net.justmachinery.shade.generated.routing.SubDirectoryRouter
 import net.justmachinery.shade.generated.routing.TestRoutingSpecRouter
 import net.justmachinery.shade.generated.routing.build
-import net.justmachinery.shade.routing.GenerateRouting
-import net.justmachinery.shade.routing.QueryParamSpec
-import net.justmachinery.shade.routing.RoutingSpec
-import net.justmachinery.shade.routing.RoutingSpecBase
+import net.justmachinery.shade.routing.*
 
 class RoutingTest : Component<Unit>(){
     override fun HtmlBlockTag.render() {
@@ -22,7 +19,7 @@ class RoutingTest : Component<Unit>(){
 
 @GenerateRouting
 object TestRoutingSpec : RoutingSpecBase() {
-    override val appendBasePath: String = "/test/routing"
+    override fun internalTransform(urlInfo: InternalUrlInfo) = urlInfo.addPathPrefix("/test/routing")
 
     val index = indexPage()
     val subPage = page("subpage")
@@ -83,7 +80,7 @@ class RoutingDemoPage : Component<Unit>() {
             div {
                 a(){
                     navigate = route
-                    +route.render()
+                    +route.asExternalUrl()
                 }
             }
         }
