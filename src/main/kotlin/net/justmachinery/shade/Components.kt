@@ -105,6 +105,7 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
      * If false, render errors will propagate upwards through the component tree.
      * Note that a partial render will still complete for this component.
      */
+    //TODO: This is broken on rerenders and should probably be replaced by a context-based system.
     open fun onCatch(exception: ComponentException) : Boolean = false
 
 

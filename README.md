@@ -72,7 +72,7 @@ matures and opens up new ways to circumvent earlier limitations.
 - Security is more straightforward, since most state and logic lives on the server and can't be easily faked
 
 ### Cons
-- Latency. This could be a big one if your users have poor latency and need tons of actions to navigate your interfaces. (This might be improved in the future to "preload" changes on the client.)
+- Latency. This could be a big drawback if your users have poor latency and need tons of actions to navigate your interfaces. (This might be improved in the future to "preload" changes on the client.)
 - More work is done by the server. More bandwidth may be required for long lived, highly dynamic pages.
 - State that lives on the server dies if that server does, which could interrupt user's work.
 
@@ -82,7 +82,7 @@ matures and opens up new ways to circumvent earlier limitations.
 - Shade is less opinionated about choice of web server and is designed to be
 drop-in for projects already using the Kotlinx HTML DSL, or embedded within any HTML
     - Kweb runs on its own Ktor server
-- Shade does not (yet) provide routing or database bindings
+- Shade does not (yet) provide database bindings
 - Shade is based on components and reactive rerendering, like everything is wrapped in a granular kweb `render {}` block
     - Kweb has a more imperative update style
 - Shade does not currently have any "immediate events" beyond allowing arbitrary JavaScript
@@ -106,3 +106,12 @@ Replace VERSION with the latest version of this repository (currently [ ![Downlo
 
 ## Contributions welcome!
 This is a highly experimental library. The core is simple enough to be functionally usable, but parts and polish may be lacking. Help us out by opening an issue or submitting a patch!
+
+## Usage
+### Routing
+Shade does include support for routing, both basic and an annotation-based generator that
+allows for both typesafe URL construction and navigation.
+
+To use annotation-based routing, enable kapt then add `kapt "net.justmachinery:shade:VERSION"` to your gradle dependencies. Then, annotate an instance of `RoutingSpecBase` with `@GenerateRouting`.
+
+See the included RoutingTest for a sample.
