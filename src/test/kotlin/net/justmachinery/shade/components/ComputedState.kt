@@ -6,6 +6,8 @@ class ComputedState : Component<Unit>() {
     var firstNumber by react(5)
     var secondNumber by react(10)
     val sum by computed { firstNumber + secondNumber }
+    val sumMod10 by computed { sum % 10 }
+    val sumMod10Plus3 by computed { sumMod10 + 3 }
     override fun HtmlBlockTag.render() {
         h2 { +"Computed State" }
         div {
@@ -29,11 +31,25 @@ class ComputedState : Component<Unit>() {
                     }
                 }
             }
-            +" = "
             render {
                 div {
                     newBackgroundColorOnRerender()
+                    +" = "
                     +(sum.toString())
+                }
+            }
+            render {
+                div {
+                    newBackgroundColorOnRerender()
+                    +" % 10 = "
+                    +(sumMod10.toString())
+                }
+            }
+            render {
+                div {
+                    newBackgroundColorOnRerender()
+                    +" + 3 = "
+                    +(sumMod10Plus3.toString())
                 }
             }
         }

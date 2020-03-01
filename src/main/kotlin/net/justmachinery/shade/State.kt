@@ -1,5 +1,6 @@
 package net.justmachinery.shade
 
+import com.google.common.collect.Sets
 import java.lang.ref.WeakReference
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
@@ -39,13 +40,13 @@ class Atom {
 sealed class ReactiveObserver {
     internal abstract val observing: MutableSet<Atom>
 
-    internal fun runRecordingDependencies(run : ()->Unit) {
+    internal fun <T> runRecordingDependencies(run : ()->T) : T {
         val previousObserveBlock = observeBlock.get()
         val newState = mutableSetOf<Atom>()
         observeBlock.set(newState)
 
         try {
-            run()
+            return run()
         } finally {
             observeBlock.set(previousObserveBlock)
 
@@ -94,6 +95,7 @@ internal fun runRenderNoChangesAllowed(block : ()->Unit){
     }
 }
 
+
 internal fun <T> runChangeBatch(
     /**
      * If true, then allows changes even while rendering
@@ -112,38 +114,46 @@ internal fun <T> runChangeBatch(
         else -> { return block() }
     }
 
-    val newBatch = mutableSetOf<Atom>()
+    val newBatch = Sets.newIdentityHashSet<Atom>()
     changeBatch.set(ChangeBatch.Batch(newBatch))
     try {
         val returnValue = block()
         if (newBatch.isNotEmpty()) {
-            val renders = mutableSetOf<Render>()
+            val renders = Sets.newIdentityHashSet<Render>()
 
-            while(true){
-                var observers = newBatch.asSequence().flatMap { it.observers.asSequence() }
-                if(observers.iterator().hasNext()){
-                    val actions = mutableSetOf<Reaction>()
-                    while(true) {
-                        renders.addAll(observers.filterIsInstance(Render::class.java))
-                        actions.addAll(observers.filterIsInstance(Reaction::class.java))
-                        val newComputedValues = observers.filterIsInstance(ComputedValue::class.java)
-                        val anyComputed = newComputedValues.any { !it.isDirty() }
-                        if(!anyComputed){ break }
-                        newComputedValues.forEach { it.markDirty() }
-                        observers = newComputedValues.flatMap { it.observers.asSequence() }
+            while(newBatch.isNotEmpty()){
+                //1. Find all potentially dirtied nodes
+                val dirtied = findAllPotentiallyDirtyNodes(newBatch.asSequence())
+                newBatch.clear()
+
+                //2. Topologically sort them
+                val sorted = topologicalSort(dirtied)
+
+                //3. Re-evaluate them in that order, checking that their dependencies Actually Changed
+                //First, all computed values recompute
+                sorted.observers.asSequence().filterIsInstance(ComputedValue::class.java).forEach {
+                    val changed = if(sorted.staleDependencyCount[it]!! > 0){
+                        it.computeAndCheckChange()
+                    } else {
+                        false
                     }
-
-                    if(actions.isNotEmpty()){
-                        newBatch.clear()
-                        actions.forEach { action ->
-                            action.runRecordingDependencies(action::run)
+                    if(!changed){
+                        it.observers.forEach { subObs ->
+                            sorted.staleDependencyCount.compute(subObs) { _, value -> value!! - 1 }
                         }
-                        continue
                     }
                 }
-                break
+                //Next, all actions trigger
+                sorted.observers.asSequence().filterIsInstance(Reaction::class.java).forEach {
+                    if(sorted.staleDependencyCount[it]!! > 0){
+                        it.run()
+                    }
+                }
+                //Defer all renders until the end
+                renders.addAll(sorted.observers.filterIsInstance(Render::class.java).filter { sorted.staleDependencyCount[it]!! > 0 })
+                //Loop in case actions triggered more changes
             }
-
+            //Now we can process renders
             if(renders.isNotEmpty()){
                 renders.asSequence().mapNotNull {
                     val component = it.comp.get()
@@ -163,6 +173,62 @@ internal fun <T> runChangeBatch(
         }
     }
 }
+
+private data class DirtyNodeData(var isTemporaryMarked : Boolean, var isRootDirty : Boolean)
+private fun findAllPotentiallyDirtyNodes(changed : Sequence<Atom>) : MutableMap<ReactiveObserver, DirtyNodeData> {
+    val dirtied = IdentityHashMap<ReactiveObserver, DirtyNodeData>()
+    var first = true
+    var unvisited = changed.flatMap { it.observers.asSequence() }.toList()
+    while(true){
+        val nextUnvisited = mutableListOf<ReactiveObserver>()
+        unvisited.forEach { observer ->
+            if(dirtied.put(observer, DirtyNodeData(false, isRootDirty = first)) == null){
+                if(observer is ComputedValue<*>){
+                    nextUnvisited.addAll(observer.observers)
+                }
+            }
+        }
+        if(nextUnvisited.isEmpty()){ break }
+        unvisited = nextUnvisited
+        first = false
+    }
+    return dirtied
+}
+
+private data class ObserverCountAndList(
+    val staleDependencyCount : IdentityHashMap<ReactiveObserver, Int>,
+    val observers : List<ReactiveObserver>
+)
+private fun topologicalSort(dirty : MutableMap<ReactiveObserver, DirtyNodeData>) : ObserverCountAndList {
+    val sorted = ArrayList<ReactiveObserver>()
+    val staleDependencyCount = IdentityHashMap<ReactiveObserver, Int>()
+
+    fun visit(key : ReactiveObserver, data: DirtyNodeData){
+        if(data.isTemporaryMarked){
+            throw IllegalStateException("Circular loop detected involving $key")
+        }
+        data.isTemporaryMarked = true
+        if(key is ComputedValue<*>){
+            key.observers.forEach { obs ->
+                dirty[obs]?.let { visit(obs, it) }
+                staleDependencyCount.compute(obs) { _, value -> (value ?: 0) + 1}
+            }
+        }
+        dirty.remove(key)
+        sorted.add(key)
+        staleDependencyCount.compute(key) { _, value -> (value ?: 0) + if(data.isRootDirty) 1 else 0}
+    }
+    while(dirty.isNotEmpty()){
+        val first = dirty.entries.first()
+        visit(first.key, first.value)
+    }
+    return ObserverCountAndList(
+        //We put the deepest dependencies first when iterating
+        observers = sorted.asReversed(),
+        staleDependencyCount = staleDependencyCount
+    )
+}
+
 
 
 class ObservableValue<T>(
@@ -197,7 +263,7 @@ class ObservableValue<T>(
 }
 
 class ComputedValue<T>(
-    private val computed: () -> T,
+    private val compute: () -> T,
     lazy : Boolean = true
 ) : ReactiveObserver() {
     private val atom = Atom()
@@ -210,58 +276,82 @@ class ComputedValue<T>(
 
     init {
         if(!lazy){
-            computeInternal()
+            blindCompute()
         }
     }
 
-    fun isDirty() = dirty
-    fun markDirty(){
+    private fun blindCompute(){
         synchronized(this){
-            dirty = true
+            this.runRecordingDependencies {
+                value = compute()
+                dirty = false
+            }
+        }
+    }
+
+    internal fun computeAndCheckChange() : Boolean {
+        return synchronized(this){
+            runRecordingDependencies {
+                val oldValue = value
+                value = compute()
+                val didChange = dirty || oldValue != value
+                dirty = false
+                didChange
+            }
+        }
+    }
+
+    private fun computeAndNotify() {
+        if(computeAndCheckChange()){
+            atom.reportChanged()
+        }
+    }
+
+    fun recompute(){
+        computeAndNotify()
+    }
+
+    fun compact(){
+        synchronized(this){
             value = null
-        }
-    }
-
-    private fun doComputeInternal() {
-        value = computed()
-        dirty = false
-    }
-
-    private fun computeInternal(){
-        synchronized(this){
-            this.runRecordingDependencies(this::doComputeInternal)
+            dirty = true
         }
     }
 
     fun get(): T {
         atom.reportObserved()
-
-        if(dirty){
-            synchronized(this){
-                if(dirty){
-                    computeInternal()
-                }
+        synchronized(this){
+            if(dirty){
+                blindCompute()
             }
+            @Suppress("UNCHECKED_CAST")
+            return value as T
         }
-        @Suppress("UNCHECKED_CAST")
-        return value as T
     }
     operator fun getValue(thisRef: Any?, property: KProperty<*>): T = get()
+
+    override fun toString() = "ComputedValue(${compute.javaClass})"
 }
 
 internal class Render(component : AdvancedComponent<*, *>) : ReactiveObserver() {
     internal val comp = WeakReference(component)
     override val observing = mutableSetOf<Atom>()
+
+    override fun toString() = "Render(${comp.get()})"
 }
 
 class Reaction(private val cb: () -> Unit) : ReactiveObserver() {
     override val observing = mutableSetOf<Atom>()
 
     init {
-        runRecordingDependencies(this::run)
+        run()
     }
 
-    internal fun run() {
-        cb()
+    fun run() {
+        runRecordingDependencies {
+            cb()
+        }
     }
+
+    override fun toString() = "Reaction($cb)"
 }

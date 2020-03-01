@@ -50,7 +50,11 @@ abstract class ComponentInTag<PropType : Any, RenderIn : Tag> :
 
 typealias RenderFunction<RenderIn> = RenderIn.()->Unit
 class FunctionComponent<RenderIn : Tag>(fullProps : ComponentInitData<Props<RenderIn>>) : AdvancedComponent<FunctionComponent.Props<RenderIn>, RenderIn>(fullProps){
-    data class Props<RenderIn : Tag>(val cb : RenderIn.(FunctionComponent<RenderIn>)->Unit, val parent : AdvancedComponent<*,*>)
+    data class Props<RenderIn : Tag>(
+        val cb : RenderIn.(FunctionComponent<RenderIn>)->Unit,
+        val realCb : Any, //For debugging
+        val parent : AdvancedComponent<*,*>
+    )
     override fun RenderIn.render() {
         val parent = props.parent
         val cb = props.cb
@@ -61,6 +65,8 @@ class FunctionComponent<RenderIn : Tag>(fullProps : ComponentInitData<Props<Rend
             parent.renderState.renderingFunction = null
         }
     }
+
+    override fun toString() = "FunctionComponent(${_props?.realCb?.javaClass})"
 }
 
 
@@ -262,7 +268,7 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
         @Suppress("UNCHECKED_CAST")
         add(
             FunctionComponent::class as KClass<FunctionComponent<RenderIn>>,
-            FunctionComponent.Props(cb = { cb() }, parent = this@AdvancedComponent)
+            FunctionComponent.Props(cb = { cb() }, realCb = cb, parent = this@AdvancedComponent)
         )
     }
 
@@ -273,7 +279,7 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
         @Suppress("UNCHECKED_CAST")
         add(
             FunctionComponent::class as KClass<FunctionComponent<RenderIn>>,
-            FunctionComponent.Props(cb = cb, parent = this@AdvancedComponent)
+            FunctionComponent.Props(cb = cb, realCb = cb, parent = this@AdvancedComponent)
         )
     }
 
