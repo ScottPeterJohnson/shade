@@ -14,7 +14,7 @@ apply plugin: 'maven'
 apply plugin: 'maven-publish'
 
 group 'net.justmachinery'
-version '0.2.9'
+version '0.2.10'
 
 task testServer(type: JavaExec){
     classpath = sourceSets.test.runtimeClasspath
@@ -87,6 +87,8 @@ dependencies {
     implementation group: 'com.google.guava', name: 'guava', version: '28.2-jre'
     implementation group: 'org.apache.httpcomponents', name: 'httpclient', version: '4.5.11'
     implementation 'org.jetbrains.kotlinx:kotlinx-metadata-jvm:0.1.0'
+
+    implementation 'io.arrow-kt:arrow-core:0.10.4'
 
 
     //Logging

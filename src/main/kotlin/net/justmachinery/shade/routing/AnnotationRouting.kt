@@ -49,7 +49,9 @@ abstract class RoutingSpecBase : RoutingSpec() {
 class RoutedPage<QueryParams : QueryParamSpec>(val path : String?, val contents: QueryParams)
 class RoutedPath<Contents>(val path : String, val contents : Contents)
 
-
+interface ParamsHolderSupport {
+    val allValid : Boolean
+}
 
 /**
  * A fully finished route, ready to be turned into a string or navigated to.

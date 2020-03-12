@@ -113,18 +113,18 @@ class WithRouting<RenderIn : Tag>(
             it != null && it == pathPart
         }, cb)
     }
-    fun match(page : RoutedPage<*>, cb : RenderFunction<RenderIn>) {
+    fun match(page : RoutedPage<*>, support: ParamsHolderSupport? = null, cb : RenderFunction<RenderIn>) {
         match({
-            it == page.path || (page.path == null && it?.isEmpty() ?: true)
+            (it == page.path || (page.path == null && it?.isEmpty() ?: true)) && (support == null || support.allValid)
         }, cb)
     }
-    fun match(path : RoutedPath<*>, cb : RenderFunction<RenderIn>) {
+    fun match(path : RoutedPath<*>, support: ParamsHolderSupport? = null, cb : RenderFunction<RenderIn>) {
         match({
-            it != null && it == path.path
+            it != null && it == path.path && (support == null || support.allValid)
         }, cb)
     }
     fun match(matcher : (String?)->Boolean, cb : RenderFunction<RenderIn>) {
-        val part = routingContext.currentPathFragment()?.get()
+        val part = routingContext.currentPathFragment().get()
         if(!hasMatched && matcher(part)){
             hasMatched = true
             component.addContext(

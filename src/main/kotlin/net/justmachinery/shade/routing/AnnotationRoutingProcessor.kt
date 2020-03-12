@@ -1,5 +1,6 @@
 package net.justmachinery.shade.routing
 
+import arrow.core.Either
 import com.squareup.kotlinpoet.*
 import kotlinx.html.Tag
 import net.justmachinery.shade.AdvancedComponent
@@ -265,22 +266,41 @@ private class AnnotationRoutingEmitter(val routeData: RouteData) {
         name : ClassName,
         params : List<QueryParameterData>
     ) : ClassName {
-        val spec = TypeSpec.classBuilder(name)
-        val constructor = FunSpec.constructorBuilder()
+        val paramsHolder = TypeSpec.classBuilder(name)
 
+        val supportName = name.nestedClass("Support")
+        val support = TypeSpec.classBuilder(supportName)
+        val supportConstructor = FunSpec.constructorBuilder()
+        support.addSuperinterface(ParamsHolderSupport::class)
+
+
+        val computed = MemberName("net.justmachinery.shade", "computed")
         params.forEach { param ->
-            constructor.addParameter(param.name, ObservableValue::class.parameterizedBy(String::class.asTypeName().copy(nullable = true)))
-            constructor.addParameter(param.name + "_spec", QueryParam::class.parameterizedBy(param.type))
-            spec.addProperty(
+            supportConstructor.addParameter(param.name, ObservableValue::class.parameterizedBy(String::class.asTypeName().copy(nullable = true)))
+            supportConstructor.addParameter(param.name + "_spec", QueryParam::class.parameterizedBy(param.type))
+            support.addProperty(
+                PropertySpec.builder(param.name, Either::class.asTypeName().parameterizedBy(param.type, Exception::class.asTypeName()))
+                    .delegate("%M { ${param.name}_spec.tryParse(${param.name}.value) }", computed)
+                    .build()
+            )
+            paramsHolder.addProperty(
                 PropertySpec.builder(param.name, param.type)
-                    .delegate("%M(lazy = false){ ${param.name}_spec.tryParse(${param.name}.value) }", MemberName("net.justmachinery.shade", "computed"))
-                    .build())
-            Unit
+                    .getter(FunSpec.getterBuilder().addCode("return support.${param.name}.fold({ it }, { throw it })").build())
+                    .build()
+            )
         }
+        support.addProperty(PropertySpec.builder("allValid", Boolean::class)
+            .addModifiers(KModifier.OVERRIDE)
+            .delegate("%M { ${params.joinToString(" && "){ "this." + it.name + ".isLeft()" } } }", computed)
+            .build())
 
-        spec.primaryConstructor(constructor.build())
+        support.primaryConstructor(supportConstructor.build())
+        paramsHolder.primaryConstructor(FunSpec.constructorBuilder()
+            .addPropertyParameter(paramsHolder, "support", supportName)
+            .build())
 
-        addTo.addType(spec.build())
+        paramsHolder.addType(support.build())
+        addTo.addType(paramsHolder.build())
 
         return name
     }
@@ -299,16 +319,15 @@ private class AnnotationRoutingEmitter(val routeData: RouteData) {
         data.pages.forEach { pageData ->
             func.beginControlFlow("run")
             func.addStatement("val specPage = spec.${pageData.name}")
-            pageData.queryParameters.forEach {
-                func.addStatement("val ${it.name} = getParam(specPage.contents.${it.name}.name)")
-            }
-            func.beginControlFlow("match(specPage)")
             if(pageData.queryParameters.isNotEmpty()){
                 val params = pageData.queryParameters.joinToString(", "){
-                    "${it.name}, specPage.contents.${it.name}"
+                    "getParam(specPage.contents.${it.name}.name), specPage.contents.${it.name}"
                 }
-                func.addStatement("${pageData.name}(%T($params))", data.paramClassName(pageData.name))
+                func.addStatement("val support = %T($params)", data.paramClassName(pageData.name).nestedClass("Support"))
+                func.beginControlFlow("match(specPage, support)")
+                func.addStatement("${pageData.name}(%T(support))", data.paramClassName(pageData.name))
             } else {
+                func.beginControlFlow("match(specPage)")
                 func.addStatement("${pageData.name}()")
             }
             func.endControlFlow()
@@ -318,20 +337,20 @@ private class AnnotationRoutingEmitter(val routeData: RouteData) {
             val name = pathData.name
             func.beginControlFlow("run")
             func.addStatement("val specNext = spec.$name")
-            pathData.data.queryParameters.forEach {
-                func.addStatement("val ${it.name} = getParam(specNext.contents.${it.name}.name)")
-            }
-            func.beginControlFlow("match(specNext)")
-            func.beginControlFlow("route")
-                if(pathData.data.queryParameters.isNotEmpty()){
-                    val params = pathData.data.queryParameters.joinToString(", "){
-                        "${it.name}, specNext.contents.${it.name}"
-                    }
-                    func.addStatement("val instance = ${name}(%T($params))", data.paramClassName(pathData.name))
-                } else {
-                    func.addStatement("val instance = $name()")
+            if(pathData.data.queryParameters.isNotEmpty()){
+                val params = pathData.data.queryParameters.joinToString(", "){
+                    "getParam(specNext.contents.${it.name}.name), specNext.contents.${it.name}"
                 }
-                func.addStatement("instance.dispatch(component, this, specNext.contents)")
+                func.addStatement("val support = %T($params)", data.paramClassName(name).nestedClass("Support"))
+                func.beginControlFlow("match(specNext, support)")
+                func.beginControlFlow("route")
+                func.addStatement("val instance = ${name}(%T(support))", data.paramClassName(name))
+            } else {
+                func.beginControlFlow("match(specNext)")
+                func.beginControlFlow("route")
+                func.addStatement("val instance = $name()")
+            }
+            func.addStatement("instance.dispatch(component, this, specNext.contents)")
             func.endControlFlow()
             func.endControlFlow()
             func.endControlFlow()

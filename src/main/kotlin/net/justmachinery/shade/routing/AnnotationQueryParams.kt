@@ -1,5 +1,7 @@
 package net.justmachinery.shade.routing
 
+import arrow.core.Either
+
 interface QueryParamSpec {
     fun param(name : String) = StringParam(name)
     fun stringParam(name : String) = StringParam(name)
@@ -26,19 +28,20 @@ interface QueryParam<T> {
 
     fun optional() = OptionalParam(this)
 
-    fun tryParse(value : String?) : T {
-        if(value == null){
-            @Suppress("UNCHECKED_CAST")
+    fun tryParse(value : String?) : Either<T, Exception> {
+        return if(value == null){
             if(this is OptionalParam<T>){
-                return null as T
+                @Suppress("UNCHECKED_CAST")
+                Either.left(null as T)
             } else {
-                throw QueryParamNotFoundException(name)
+                Either.right(QueryParamNotFoundException(name))
             }
-        }
-        try {
-            return parse(value)
-        } catch(t : Throwable){
-            throw QueryParamParseException(name, value).apply { addSuppressed(t) }
+        } else {
+            try {
+                Either.left(parse(value))
+            } catch(t : Throwable){
+                Either.right(QueryParamParseException(name, value).apply { addSuppressed(t) })
+            }
         }
     }
 }
