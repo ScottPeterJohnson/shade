@@ -9,6 +9,9 @@ import kotlinx.html.TagConsumer
 import kotlinx.html.stream.appendHTML
 import kotlinx.html.visit
 import net.justmachinery.shade.*
+import net.justmachinery.shade.component.AdvancedComponent
+import net.justmachinery.shade.component.ComponentInitData
+import net.justmachinery.shade.component.FunctionComponent
 import org.apache.commons.text.StringEscapeUtils
 import java.io.ByteArrayOutputStream
 import java.util.*
@@ -40,7 +43,7 @@ internal fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.renderInternal(tag 
     ).toMap(), tag.consumer).visit {}
 
     try {
-        withComponentContext(context){
+        withComponentContext(baseContext){
             tag.run {
                 updateRenderTree(renderState) {
                     this@renderInternal.renderDependencies.runRecordingDependencies {

@@ -2,6 +2,7 @@ package net.justmachinery.shade
 
 import java.util.concurrent.atomic.AtomicInteger
 
+fun currentContext() = contextInRenderingThread.get() ?: emptyContext
 internal val contextInRenderingThread = ThreadLocal<ComponentContext>()
 internal val emptyContext = ComponentContext(parent = null)
 

@@ -3,6 +3,7 @@ package net.justmachinery.shade
 import kotlinx.css.Display
 import kotlinx.css.display
 import kotlinx.html.*
+import net.justmachinery.shade.component.Component
 
 /**
  * This example tests efficient rerendering of components by key.

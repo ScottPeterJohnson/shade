@@ -1,6 +1,7 @@
-package net.justmachinery.shade.routing
+package net.justmachinery.shade.routing.annotation
 
 import arrow.core.Either
+import net.justmachinery.shade.routing.base.RoutingException
 
 interface QueryParamSpec {
     fun param(name : String) = StringParam(name)
@@ -34,13 +35,21 @@ interface QueryParam<T> {
                 @Suppress("UNCHECKED_CAST")
                 Either.left(null as T)
             } else {
-                Either.right(QueryParamNotFoundException(name))
+                Either.right(
+                    QueryParamNotFoundException(
+                        name
+                    )
+                )
             }
         } else {
             try {
                 Either.left(parse(value))
             } catch(t : Throwable){
-                Either.right(QueryParamParseException(name, value).apply { addSuppressed(t) })
+                Either.right(
+                    QueryParamParseException(
+                        name,
+                        value
+                    ).apply { addSuppressed(t) })
             }
         }
     }
@@ -50,38 +59,50 @@ open class QueryParamException(message : String) : RoutingException(message)
 class QueryParamNotFoundException(val name : String) : QueryParamException("Param not found: $name")
 class QueryParamParseException(val name : String, val value : String) : QueryParamException("Could not parse param $name from \"$value\"")
 
-class OptionalParam<T>(private val wrapped : QueryParam<T>) : QueryParam<T> {
+class OptionalParam<T>(private val wrapped : QueryParam<T>) :
+    QueryParam<T> {
     override val name = wrapped.name
     override fun parse(value: String) = wrapped.parse(value)
     override fun serialize(value: T) = wrapped.serialize(value)
 }
 
-class StringParam(override val name: String) : QueryParam<String> {
+class StringParam(override val name: String) :
+    QueryParam<String> {
     override fun parse(value: String) = value
     override fun serialize(value: String) = value
 }
 
-class LongParam(override val name: String) : QueryParam<Long> {
+class LongParam(override val name: String) :
+    QueryParam<Long> {
     override fun parse(value: String) = value.toLong()
     override fun serialize(value: Long) = value.toString()
 }
 
-class IntParam(override val name: String) : QueryParam<Int> {
+class IntParam(override val name: String) :
+    QueryParam<Int> {
     override fun parse(value: String) = value.toInt()
     override fun serialize(value: Int) = value.toString()
 }
 
-class FloatParam(override val name: String) : QueryParam<Float> {
+class FloatParam(override val name: String) :
+    QueryParam<Float> {
     override fun parse(value: String) = value.toFloat()
     override fun serialize(value: Float) = value.toString()
 }
 
-class DoubleParam(override val name: String) : QueryParam<Double> {
+class DoubleParam(override val name: String) :
+    QueryParam<Double> {
     override fun parse(value: String) = value.toDouble()
     override fun serialize(value: Double) = value.toString()
 }
 
-class BooleanParam(override val name: String) : QueryParam<Boolean> {
+class BooleanParam(override val name: String) :
+    QueryParam<Boolean> {
     override fun parse(value: String) = value.toBoolean()
     override fun serialize(value: Boolean) = value.toString()
+}
+
+
+interface ParamsHolderSupport {
+    val allValid : Boolean
 }

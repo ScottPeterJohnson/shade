@@ -3,7 +3,8 @@ package net.justmachinery.shade.components
 import kotlinx.coroutines.launch
 import kotlinx.html.*
 import net.justmachinery.shade.*
-import net.justmachinery.shade.routing.UrlInfo
+import net.justmachinery.shade.component.Component
+import net.justmachinery.shade.routing.base.UrlInfo
 import java.time.Duration
 import java.time.temporal.ChronoUnit
 

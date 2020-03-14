@@ -4,6 +4,8 @@ import kotlinx.css.FontWeight
 import kotlinx.css.fontWeight
 import kotlinx.html.*
 import net.justmachinery.shade.*
+import net.justmachinery.shade.component.Component
+import net.justmachinery.shade.component.PropsType
 
 class TodoListSection : Component<Unit>() {
     //This is the syntax for an observable piece of per-component state.

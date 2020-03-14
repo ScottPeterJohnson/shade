@@ -5,7 +5,7 @@ import kotlinx.html.h2
 import kotlinx.html.html
 import kotlinx.html.stream.createHTML
 import net.justmachinery.shade.components.RootComponent
-import net.justmachinery.shade.routing.UrlInfo
+import net.justmachinery.shade.routing.base.UrlInfo
 import org.eclipse.jetty.websocket.api.Session
 import org.eclipse.jetty.websocket.api.annotations.OnWebSocketClose
 import org.eclipse.jetty.websocket.api.annotations.OnWebSocketConnect

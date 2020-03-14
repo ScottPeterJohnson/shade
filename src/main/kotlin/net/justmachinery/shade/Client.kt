@@ -4,6 +4,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.slf4j.MDCContext
 import kotlinx.html.Tag
 import mu.KLogging
+import net.justmachinery.shade.component.AdvancedComponent
 import net.justmachinery.shade.render.renderInternal
 import net.justmachinery.shade.render.updateRender
 import org.intellij.lang.annotations.Language
@@ -35,17 +36,17 @@ class Client(
     /**
      * Set of components known to be dirty and require rerendering
      */
-    private val needRerender = Collections.synchronizedSet(mutableSetOf<AdvancedComponent<*,*>>())
+    private val needRerender = Collections.synchronizedSet(mutableSetOf<AdvancedComponent<*, *>>())
     /**
      * Used to avoid excessive rerender of a component when doing batched rendering, as its parent may rerender it.
      */
-    private var dontRerender: MutableSet<AdvancedComponent<*,*>>? = null
+    private var dontRerender: MutableSet<AdvancedComponent<*, *>>? = null
     internal fun markDontRerender(component : AdvancedComponent<*, *>){ dontRerender?.add(component) }
 
     /**
      * Flag components dirty, and queue a rerender
      */
-    internal fun setComponentsDirty(components : List<AdvancedComponent<*,*>>) = logging {
+    internal fun setComponentsDirty(components : List<AdvancedComponent<*, *>>) = logging {
         logger.debug { "Set dirty: ${components.joinToString(",")}" }
         needRerender.addAll(components)
         triggerReRender()
@@ -76,7 +77,7 @@ class Client(
      */
     private fun rerender() : Job = coroutineScope.launch {
         logging {
-            val rerendered = Collections.newSetFromMap<AdvancedComponent<*,*>>(WeakHashMap())
+            val rerendered = Collections.newSetFromMap<AdvancedComponent<*, *>>(WeakHashMap())
             dontRerender = rerendered
             try {
                 //We render from the top of the tree hierarchy down, to avoid excessive rerenders when a parent and
@@ -122,7 +123,7 @@ class Client(
 
     //These are used to make processing of user events sequential
     @Volatile private var isEventProcessing = false
-    private val eventQueue : Queue<Pair<suspend (Json?) -> Unit, Json?>> = ArrayDeque()
+    private val eventQueue : Queue<Pair<CallbackData, Json?>> = ArrayDeque()
 
     internal val supervisor = SupervisorJob()
     internal val coroutineScope = CoroutineScope(supervisor)
@@ -134,14 +135,16 @@ class Client(
         }
     }
 
-    internal fun onCallbackError(id : Long, exception : JavascriptException) = logging {
+    internal fun onCallbackJsError(id : Long, exception : JavascriptException) = logging {
         val callback = getCallback(id)
         coroutineScope.launch(context = MDCContext()){
-            val onError = callback?.onError
+            val onError = callback?.errorHandler
             try {
-                if(onError != null){
-                    onError(exception)
-                } else {
+                val handled = onError != null && onError.handleException(
+                    context = ComponentErrorHandlingContext(ComponentErrorSource.JAVASCRIPT, null, exception),
+                    client = this@Client
+                )
+                if (!handled) {
                     if(callback == null){
                         logger.warn { "Callback $id threw $exception but its handler expired" }
                     }
@@ -161,17 +164,21 @@ class Client(
         return try {
             cb()
         } catch(t : Throwable){
-            try {
-                if(message != null){
-                    logger.error(t){ message() }
-                } else {
-                    logger.error(t.message, t)
-                }
-            } catch(t2 : Throwable){
-                t.addSuppressed(t2)
-                logger.error(t) { "(Could not generate a message for this exception)" }
-            }
+            swallowException(message, t)
             null
+        }
+    }
+
+    internal fun swallowException(message: (()->String)? = null, t : Throwable){
+        try {
+            if(message != null){
+                logger.error(t){ message() }
+            } else {
+                logger.error(t.message, t)
+            }
+        } catch(t2 : Throwable){
+            t.addSuppressed(t2)
+            logger.error(t) { "(Could not generate a message for this exception)" }
         }
     }
 
@@ -189,13 +196,13 @@ class Client(
             synchronized(eventQueue){
                 if(isEventProcessing){
                     logger.trace { "Queuing processing of callback $id" }
-                    eventQueue.add(callback.callback to data)
+                    eventQueue.add(callback to data)
                 } else {
                     logger.trace { "Starting new processing coroutine for callback $id" }
                     isEventProcessing = true
                     coroutineScope.launch(context = MDCContext()) {
                         batchingReRenders {
-                            runEventLockedCallback(callback.callback, data)
+                            runEventLockedCallback(callback, data)
                         }
                     }
                 }
@@ -204,13 +211,13 @@ class Client(
         } else {
             coroutineScope.launch(context = MDCContext()) {
                 batchingReRenders {
-                    runCallbackCatchingErrors(callback.callback, data)
+                    runCallbackCatchingErrors(callback, data)
                 }
             }
         }
     }
 
-    private suspend fun runEventLockedCallback(callback: suspend (Json?) -> Unit, data: Json?){
+    private suspend fun runEventLockedCallback(callback: CallbackData, data: Json?){
         var currentCallback = callback
         var currentData = data
         while(true){
@@ -232,13 +239,17 @@ class Client(
         }
     }
 
-    private suspend fun runCallbackCatchingErrors(callback: suspend (Json?) -> Unit, data: Json?){
+    private suspend fun runCallbackCatchingErrors(callback: CallbackData, data: Json?){
         try {
-            callback(data)
+            callback.callback(data)
         } catch(t : Throwable){
             if(t is CancellationException){
                 logger.info(t) { "Callback processing cancelled" }
-            } else {
+            } else if(callback.errorHandler?.handleException(ComponentErrorHandlingContext(
+                    source = ComponentErrorSource.CALLBACK,
+                    component = null,
+                    throwable = t
+                ), this) != true){
                 logger.error(t) { "Error processing callback" }
             }
         }
@@ -296,26 +307,18 @@ class Client(
         }
     }
 
-    fun eventCallbackString(
-        @Language("JavaScript 1.8") prefix : String = "",
-        @Language("JavaScript 1.8") suffix : String = "",
-        @Language("JavaScript 1.8") data : String? = null,
-        cb : suspend (Json?)->Unit
-    ) : Pair<Long, String> {
-        return eventCallbackStringInternal(prefix = prefix, suffix = suffix, data = data, forceId = null, cb = cb)
-    }
-
     internal fun eventCallbackStringInternal(
         @Language("JavaScript 1.8") prefix : String = "",
         @Language("JavaScript 1.8") suffix : String = "",
-        @Language("JavaScript 1.8") data : String? = null,
-        forceId: Long? = null,
+        @Language("JavaScript 1.8") data : String?,
+        forceId: Long?,
+        errorHandler: ComponentErrorHandler?,
         cb : suspend (Json?)->Unit
     ) : Pair<Long, String> {
         val id = storeCallback(
             CallbackData(
                 callback = cb,
-                onError = null,
+                errorHandler = errorHandler,
                 requireEventLock = true
             ),
             forceId = forceId
@@ -335,7 +338,7 @@ class Client(
             callback = {
                 cb(it)
             },
-            onError = null,
+            errorHandler = null,
             requireEventLock = true
         ))
         sendJavascript(id.toString(), template(id))
@@ -349,10 +352,11 @@ class Client(
                 removeCallback(id!!)
                 future.complete(it!!)
             },
-            onError = {
+            errorHandler = ComponentErrorHandler(previous = null, handle = {
                 removeCallback(id!!)
-                future.completeExceptionally(it)
-            },
+                future.completeExceptionally(throwable)
+                true
+            }),
             requireEventLock = false
         ))
         sendJavascript(id.toString(), template(id))
@@ -403,7 +407,7 @@ class Client(
 
 private data class CallbackData(
     val callback : suspend (Json?)->Unit,
-    val onError : (suspend(JavascriptException)->Unit)?,
+    val errorHandler: ComponentErrorHandler?,
     val requireEventLock : Boolean
 )
 

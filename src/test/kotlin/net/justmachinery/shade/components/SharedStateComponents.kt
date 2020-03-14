@@ -4,7 +4,7 @@ import kotlinx.html.HtmlBlockTag
 import kotlinx.html.div
 import kotlinx.html.h2
 import kotlinx.html.input
-import net.justmachinery.shade.Component
+import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.react
 
 //This file shows sharing state between components, by passing it in via props

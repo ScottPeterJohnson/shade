@@ -5,36 +5,49 @@ import kotlinx.coroutines.launch
 import kotlinx.html.HtmlBlockTag
 import kotlinx.html.button
 import kotlinx.html.h2
-import net.justmachinery.shade.Component
+import kotlinx.html.p
+import net.justmachinery.shade.ComponentErrorHandlingContext
+import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.JavascriptException
+import net.justmachinery.shade.observable
 
 class ErrorTests : Component<Unit>() {
+    private var error by observable<ComponentErrorHandlingContext?>(null)
     override fun HtmlBlockTag.render() {
         h2 { +"Error collection and coroutines" }
-        button{
-            onClick {
-                //We can execute JS as necessary in our action handlers.
-                client.executeScript("setTimeout(function(){ throw Error(\"I am a delayed error\") }, 3000)")
-                //We can also evaluate JS expressions. This particular one will throw an error, which will
-                //appear as a JavascriptException.
-                val js = client.runExpression("notAValidSymbol").await()
-                //Both errors will by default appear in server logs.
-                println("Shouldn't get here: $js")
-            }
-            +"Click me to throw an error"
+        error?.let {
+            p { +"Caught an error in ${it.source}: ${it.throwable}" }
         }
-        button{
-            onClick {
-                try {
-                    //This is an example of erroring from a JS Promise expression.
-                    client.runPromise("new Promise(function(request, reject){ setTimeout(function(){ reject(Error(\"I am a delayed promise error\")) }, 3000) })").await()
-                } catch(e : JavascriptException){
-                    //We can catch the error if necessary.
-                    println("Error caught! $e")
+        catchErrors({
+            error = this
+            true
+        }){
+            button{
+                onClick {
+                    //We can execute JS as necessary in our action handlers.
+                    client.executeScript("setTimeout(function(){ throw Error(\"I am a delayed error\") }, 3000)")
+                    //We can also evaluate JS expressions. This particular one will throw an error, which will
+                    //appear as a JavascriptException.
+                    val js = client.runExpression("notAValidSymbol").await()
+                    //Both errors will by default appear in server logs.
+                    println("Shouldn't get here: $js")
                 }
+                +"Click me to throw an error"
             }
-            +"Click me to throw a Promise error"
+            button{
+                onClick {
+                    try {
+                        //This is an example of erroring from a JS Promise expression.
+                        client.runPromise("new Promise(function(request, reject){ setTimeout(function(){ reject(Error(\"I am a delayed promise error\")) }, 3000) })").await()
+                    } catch(e : JavascriptException){
+                        //We can catch the error if necessary.
+                        println("Error caught! $e")
+                    }
+                }
+                +"Click me to throw a Promise error"
+            }
         }
+
         button{
             onClick {
                 //Since handlers run in coroutines, they can delay without consuming a thread.

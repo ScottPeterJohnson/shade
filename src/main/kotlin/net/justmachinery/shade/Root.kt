@@ -6,6 +6,8 @@ import kotlinx.html.Tag
 import kotlinx.html.script
 import kotlinx.html.unsafe
 import mu.KLogging
+import net.justmachinery.shade.component.*
+import net.justmachinery.shade.component.componentPassProps
 import java.time.Duration
 import java.util.*
 import java.util.concurrent.Executors
@@ -28,9 +30,9 @@ class ShadeRoot(
     /**
      * This is called after a component is constructed, and could be used to e.g. inject dependencies.
      */
-    val afterConstructComponent : (AdvancedComponent<*,*>)->Unit = {},
+    val afterConstructComponent : (AdvancedComponent<*, *>)->Unit = {},
     /**
-     * Called whenever an exception is thrown in a client's JS page that cannot be mapped to a deferred
+     * Called whenever an exception is thrown in a client's JS page that cannot be mapped to or is not handled by an [ErrorHandler] in a [ShadeContext]
      */
     val onUncaughtJavascriptException : (Client, JavascriptException)->Unit = { client, err ->
         logger.error(err){ "Uncaught JS exception for client ${client.clientId}" }
@@ -51,7 +53,8 @@ class ShadeRoot(
                 @Suppress("UNCHECKED_CAST")
                 FunctionComponent(props as ComponentInitData<FunctionComponent.Props<RenderIn>>) as AdvancedComponent<T, RenderIn>
             }
-            clazz.isSubclassOf(Component::class) || clazz.isSubclassOf(ComponentInTag::class) -> {
+            clazz.isSubclassOf(Component::class) || clazz.isSubclassOf(
+                ComponentInTag::class) -> {
                 try {
                     componentPassProps.set(props)
                     clazz.java.getDeclaredConstructor().also { it.isAccessible = true }.newInstance()
@@ -172,7 +175,7 @@ class ShadeRoot(
                             val isError = tag.startsWith('E')
                             val callbackId = tag.dropWhile { it == 'E' }.toLong()
                             if(isError){
-                                clientData!!.onCallbackError(callbackId, error)
+                                clientData!!.onCallbackJsError(callbackId, error)
                             } else {
                                 clientData!!.callCallback(callbackId, data.ifBlank { null }?.let { Json(it) })
                             }

@@ -1,1 +1,1 @@
-net.justmachinery.shade.routing.AnnotationRoutingProcessor
+net.justmachinery.shade.routing.annotation.processor.AnnotationRoutingProcessor

@@ -2,7 +2,7 @@ package net.justmachinery.shade.render
 
 import kotlinx.html.Tag
 import kotlinx.html.TagConsumer
-import net.justmachinery.shade.AdvancedComponent
+import net.justmachinery.shade.component.AdvancedComponent
 import java.util.*
 
 

@@ -1,8 +1,8 @@
 package net.justmachinery.shade.components
 
 import kotlinx.html.*
-import net.justmachinery.shade.Component
-import net.justmachinery.shade.ComponentInTag
+import net.justmachinery.shade.component.Component
+import net.justmachinery.shade.component.ComponentInTag
 import net.justmachinery.shade.newBackgroundColorOnRerender
 
 class TableComponents : Component<Unit>(){

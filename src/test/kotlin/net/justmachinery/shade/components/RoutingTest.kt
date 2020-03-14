@@ -1,11 +1,15 @@
 package net.justmachinery.shade.components
 
 import kotlinx.html.*
-import net.justmachinery.shade.Component
+import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.generated.routing.SubDirectoryRouter
 import net.justmachinery.shade.generated.routing.TestRoutingSpecRouter
 import net.justmachinery.shade.generated.routing.build
-import net.justmachinery.shade.routing.*
+import net.justmachinery.shade.routing.annotation.processor.GenerateRouting
+import net.justmachinery.shade.routing.annotation.QueryParamSpec
+import net.justmachinery.shade.routing.annotation.RoutingSpec
+import net.justmachinery.shade.routing.annotation.RoutingSpecBase
+import net.justmachinery.shade.routing.base.InternalUrlInfo
 
 class RoutingTest : Component<Unit>(){
     override fun HtmlBlockTag.render() {
@@ -26,6 +30,8 @@ object TestRoutingSpec : RoutingSpecBase() {
     val subDirectory = path("subDirectory", SubDirectory)
 
     val user = page("user", UserParams)
+
+    val notFound = notFound()
 }
 
 object UserParams : QueryParamSpec {
@@ -68,6 +74,10 @@ class RoutingDemoPage : Component<Unit>() {
 
             override fun HtmlBlockTag.user(params: UserParams) {
                 p { +"This is a user page for user ${params.id}" }
+            }
+
+            override fun HtmlBlockTag.notFound() {
+                p { +"Subpage not found!" }
             }
         })
         listOf(

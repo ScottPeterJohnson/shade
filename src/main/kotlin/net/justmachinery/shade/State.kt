@@ -1,7 +1,7 @@
 package net.justmachinery.shade
 
 import com.google.common.collect.Sets
-import java.lang.ref.WeakReference
+import net.justmachinery.shade.component.AdvancedComponent
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.KProperty
@@ -156,7 +156,7 @@ internal fun <T> runChangeBatch(
             //Now we can process renders
             if(renders.isNotEmpty()){
                 renders.asSequence().mapNotNull {
-                    val component = it.comp.get()
+                    val component = it.component
                     if(component == null){ it.dispose() }
                     component
                 }.groupBy { it.client }.forEach { (client, components) ->
@@ -333,11 +333,10 @@ class ComputedValue<T>(
     override fun toString() = "ComputedValue(${compute.javaClass})"
 }
 
-internal class Render(component : AdvancedComponent<*, *>) : ReactiveObserver() {
-    internal val comp = WeakReference(component)
+internal class Render(internal var component : AdvancedComponent<*,*>?) : ReactiveObserver() {
     override val observing = mutableSetOf<Atom>()
 
-    override fun toString() = "Render(${comp.get()})"
+    override fun toString() = "Render(${component})"
 }
 
 class Reaction(private val cb: () -> Unit) : ReactiveObserver() {

@@ -118,3 +118,5 @@ internal fun <T1: Any, T2: Any, T3 : Any> MutableMap<T1,T2>.mergeMut(other: Sequ
         if(value != null) { this[it.key] = value }
     }
 }
+
+typealias RenderFunction<RenderIn> = RenderIn.()->Unit

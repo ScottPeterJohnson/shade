@@ -1,4 +1,4 @@
-package net.justmachinery.shade.routing
+package net.justmachinery.shade.routing.base
 
 import net.justmachinery.shade.ObservableValue
 import net.justmachinery.shade.mergeMut
@@ -66,7 +66,8 @@ interface UrlInfo {
     val queryString : String
 
     companion object {
-        fun of(pathInfo : String?, queryString : String?) : UrlInfo = ParseUrlInfo(pathInfo ?: "", queryString ?: "")
+        fun of(pathInfo : String?, queryString : String?) : UrlInfo =
+            ParseUrlInfo(pathInfo ?: "", queryString ?: "")
     }
 
     /**
@@ -77,7 +78,10 @@ interface UrlInfo {
         return if(inf.length > prefix.length && inf[prefix.length] != '/'){
             this
         } else {
-            ParseUrlInfo(pathInfo.removePrefix(prefix), queryString)
+            ParseUrlInfo(
+                pathInfo.removePrefix(prefix),
+                queryString
+            )
         }
     }
 
@@ -108,7 +112,8 @@ internal class BasicUrlInfo(
         get() = URLEncodedUtils.format(queryParams.map { BasicNameValuePair(it.first, it.second) }.asIterable(), Charset.forName("ASCII"))
 }
 
-private class ParseUrlInfo(override val pathInfo : String, override val queryString : String) : UrlInfo {
+private class ParseUrlInfo(override val pathInfo : String, override val queryString : String) :
+    UrlInfo {
     override val pathSegments by lazy { URLEncodedUtils.parsePathSegments(pathInfo).asSequence() }
     override val queryParams by lazy { URLEncodedUtils.parse(queryString, Charset.forName("ASCII")).asSequence().map { it.name to it.value } }
 }
