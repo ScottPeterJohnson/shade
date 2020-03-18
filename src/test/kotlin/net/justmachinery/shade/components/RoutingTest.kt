@@ -94,5 +94,10 @@ class RoutingDemoPage : Component<Unit>() {
                 }
             }
         }
+        div {
+            a(href = "doesnotexist"){
+                +"Page not found"
+            }
+        }
     }
 }
