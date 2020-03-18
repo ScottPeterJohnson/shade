@@ -141,7 +141,7 @@ class Client(
             val onError = callback?.errorHandler
             try {
                 val handled = onError != null && onError.handleException(
-                    context = ComponentErrorHandlingContext(ComponentErrorSource.JAVASCRIPT, null, exception),
+                    context = ComponentErrorHandlingContext(ContextErrorSource.JAVASCRIPT, null, exception),
                     client = this@Client
                 )
                 if (!handled) {
@@ -246,7 +246,7 @@ class Client(
             if(t is CancellationException){
                 logger.info(t) { "Callback processing cancelled" }
             } else if(callback.errorHandler?.handleException(ComponentErrorHandlingContext(
-                    source = ComponentErrorSource.CALLBACK,
+                    source = ContextErrorSource.CALLBACK,
                     component = null,
                     throwable = t
                 ), this) != true){
@@ -312,7 +312,7 @@ class Client(
         @Language("JavaScript 1.8") suffix : String = "",
         @Language("JavaScript 1.8") data : String?,
         forceId: Long?,
-        errorHandler: ComponentErrorHandler?,
+        errorHandler: ContextErrorHandler?,
         cb : suspend (Json?)->Unit
     ) : Pair<Long, String> {
         val id = storeCallback(
@@ -352,7 +352,7 @@ class Client(
                 removeCallback(id!!)
                 future.complete(it!!)
             },
-            errorHandler = ComponentErrorHandler(previous = null, handle = {
+            errorHandler = ContextErrorHandler(previous = null, handle = {
                 removeCallback(id!!)
                 future.completeExceptionally(throwable)
                 true
@@ -407,7 +407,7 @@ class Client(
 
 private data class CallbackData(
     val callback : suspend (Json?)->Unit,
-    val errorHandler: ComponentErrorHandler?,
+    val errorHandler: ContextErrorHandler?,
     val requireEventLock : Boolean
 )
 

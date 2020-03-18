@@ -56,12 +56,12 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
     override val coroutineContext: CoroutineContext get() = supervisorJob
 
     internal fun RenderIn.doRender(){
-        handleExceptions(ComponentErrorSource.RENDER){
+        handleExceptions(ContextErrorSource.RENDER){
             render()
         }
     }
     internal fun doMount(){
-        handleExceptions(ComponentErrorSource.MOUNTING){
+        handleExceptions(ContextErrorSource.MOUNTING){
             mounted()
         }
     }
@@ -76,7 +76,7 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
 
         renderDependencies.component = null
 
-        handleExceptions(ComponentErrorSource.UNMOUNTING){
+        handleExceptions(ContextErrorSource.UNMOUNTING){
             //Unmount children
             unmounted()
         }
@@ -133,14 +133,14 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
     /**
      * Adds or replaces a value in the current context, creating a new context for the duration of the cb() block.
      */
-    fun <R,T> addContext(identifier: ComponentContextIdentifier<R>, value : R, cb : ()->T) = currentContext().add(arrayOf(
-        ComponentContextValue(identifier, value)
+    fun <R,T> addContext(identifier: ShadeContextIdentifier<R>, value : R, cb : ()->T) = currentContext().add(arrayOf(
+        ShadeContextValue(identifier, value)
     ), cb)
 
     /**
      * See [addContext]
      */
-    fun <T> addContext(vararg values : ComponentContextValue<*>, cb: ()->T) = currentContext().add(values, cb)
+    fun <T> addContext(vararg values : ShadeContextValue<*>, cb: ()->T) = currentContext().add(values, cb)
 
     fun <T> catchErrors(onError: ComponentErrorHandlingContext.()->Boolean, cb: ()->T) : T {
         return currentContext().addErrorHandler(onError, cb)

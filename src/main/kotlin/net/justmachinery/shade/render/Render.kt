@@ -43,7 +43,7 @@ internal fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.renderInternal(tag 
     ).toMap(), tag.consumer).visit {}
 
     try {
-        withComponentContext(baseContext){
+        withShadeContext(baseContext){
             tag.run {
                 updateRenderTree(renderState) {
                     this@renderInternal.renderDependencies.runRecordingDependencies {

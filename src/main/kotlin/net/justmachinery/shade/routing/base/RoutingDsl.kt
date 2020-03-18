@@ -19,7 +19,7 @@ class WithRouting<RenderIn : Tag>(
     private var hasMatched = false
     private val notFoundHandlers = mutableListOf<RenderFunction<RenderIn>>()
 
-    private val routingContext = currentContext()[routingComponentContextIdentifier]!!
+    private val routingContext = currentContext()[routingContextIdentifier]!!
 
     fun currentPathPart() = routingContext.currentPathFragment().get()
     fun queryParam(name : String) = routingContext.pathData.getParam(name)
@@ -50,7 +50,7 @@ class WithRouting<RenderIn : Tag>(
         if(!hasMatched && matcher(part)){
             hasMatched = true
             component.addContext(
-                identifier = routingComponentContextIdentifier,
+                identifier = routingContextIdentifier,
                 value = routingContext.copy(currentPathSegment = routingContext.currentPathSegment + 1),
                 cb = {
                     component.run {

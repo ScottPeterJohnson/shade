@@ -83,7 +83,7 @@ class ShadeRoot(
             props = props,
             renderIn = builder::class,
             treeDepth = 0,
-            context = emptyContext
+            context = ShadeContext.empty
         )
         val component = constructComponent(root, propObj)
         client.renderRoot(builder, component)

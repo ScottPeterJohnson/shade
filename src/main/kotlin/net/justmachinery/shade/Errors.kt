@@ -2,8 +2,8 @@ package net.justmachinery.shade
 
 import net.justmachinery.shade.component.AdvancedComponent
 
-data class ComponentErrorHandler(
-    private val previous : ComponentErrorHandler?,
+data class ContextErrorHandler(
+    private val previous : ContextErrorHandler?,
     private val handle : ComponentErrorHandlingContext.()->Boolean
 ) {
     fun handleException(
@@ -12,7 +12,7 @@ data class ComponentErrorHandler(
     ) : Boolean {
         return runChangeBatch(force = true){
             client.swallowExceptions({ "While handling $context" }){
-                var handler : ComponentErrorHandler? = this
+                var handler : ContextErrorHandler? = this
                 while(handler != null){
                     if(handler.handle(context)){
                         break
@@ -26,9 +26,9 @@ data class ComponentErrorHandler(
     }
 }
 
-val ERROR_HANDLER_IDENTIFIER = ComponentContextIdentifier<ComponentErrorHandler>()
+val ERROR_HANDLER_IDENTIFIER = ShadeContextIdentifier<ContextErrorHandler>()
 
-enum class ComponentErrorSource {
+enum class ContextErrorSource {
     MOUNTING,
     UNMOUNTING,
     JAVASCRIPT,
@@ -37,13 +37,13 @@ enum class ComponentErrorSource {
 }
 
 data class ComponentErrorHandlingContext(
-    val source : ComponentErrorSource,
+    val source : ContextErrorSource,
     //The component may be available in RENDER/MOUNTING/UNMOUNTING contexts
     val component : AdvancedComponent<*, *>?,
     val throwable : Throwable
 )
 
-internal fun <T> AdvancedComponent<*,*>.handleExceptions(source: ComponentErrorSource, cb : ()->T) : T? {
+internal fun <T> AdvancedComponent<*,*>.handleExceptions(source: ContextErrorSource, cb : ()->T) : T? {
     val handler = currentContext()[ERROR_HANDLER_IDENTIFIER]
     return try {
         cb()
@@ -57,7 +57,7 @@ internal fun <T> AdvancedComponent<*,*>.handleExceptions(source: ComponentErrorS
 }
 
 
-fun <T> ComponentContext.addErrorHandler(errorHandler: ComponentErrorHandlingContext.()->Boolean, cb : ()->T) : T {
+fun <T> ShadeContext.addErrorHandler(errorHandler: ComponentErrorHandlingContext.()->Boolean, cb : ()->T) : T {
     val current = this[ERROR_HANDLER_IDENTIFIER]
-    return this.add(arrayOf(ERROR_HANDLER_IDENTIFIER.with(ComponentErrorHandler(previous = current, handle = errorHandler))), cb)
+    return this.add(arrayOf(ERROR_HANDLER_IDENTIFIER.with(ContextErrorHandler(previous = current, handle = errorHandler))), cb)
 }

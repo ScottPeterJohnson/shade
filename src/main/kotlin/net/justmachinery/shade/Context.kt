@@ -2,11 +2,40 @@ package net.justmachinery.shade
 
 import java.util.concurrent.atomic.AtomicInteger
 
-fun currentContext() = contextInRenderingThread.get() ?: emptyContext
-internal val contextInRenderingThread = ThreadLocal<ComponentContext>()
-internal val emptyContext = ComponentContext(parent = null)
+fun currentContext() = contextInRenderingThread.get() ?: ShadeContext.empty
+internal val contextInRenderingThread = ThreadLocal<ShadeContext>()
 
-internal inline fun <T> withComponentContext(context : ComponentContext, cb : ()->T) : T {
+class ShadeContext(
+    private val parent : ShadeContext?,
+    private val backing : MutableMap<ShadeContextIdentifier<*>, Any?> = HashMap(0)
+) {
+    companion object {
+        val empty = ShadeContext(parent = null)
+    }
+    @Suppress("UNCHECKED_CAST")
+    operator fun <K> get(key : ShadeContextIdentifier<K>) : K? {
+        return backing[key]  as K? ?: parent?.get(key)
+    }
+
+    internal fun <K> put(key : ShadeContextIdentifier<K>, value : K){
+        backing[key] = value
+    }
+
+    internal inline fun <ReturnType> add(
+        values : Array<out ShadeContextValue<*>>,
+        cb : ()->ReturnType
+    ) : ReturnType {
+        return withShadeContext(
+            context = ShadeContext(
+                parent = this,
+                backing = values.asSequence().map { Pair(it.identifier, it.value) }.toMap(HashMap(values.size))
+            ),
+            cb = cb
+        )
+    }
+}
+
+internal inline fun <T> withShadeContext(context : ShadeContext, cb : ()->T) : T {
     val oldContext = contextInRenderingThread.get()
     try {
         contextInRenderingThread.set(context)
@@ -16,37 +45,12 @@ internal inline fun <T> withComponentContext(context : ComponentContext, cb : ()
     }
 }
 
-class ComponentContextValue<T>(val identifier : ComponentContextIdentifier<T>, val value : T)
+class ShadeContextValue<T>(val identifier : ShadeContextIdentifier<T>, val value : T)
 
 
-class ComponentContext(
-    private val parent : ComponentContext?,
-    private val backing : MutableMap<ComponentContextIdentifier<*>, Any?> = HashMap(0)
-) {
-    @Suppress("UNCHECKED_CAST")
-    operator fun <K> get(key : ComponentContextIdentifier<K>) : K? {
-        return backing[key]  as K? ?: parent?.get(key)
-    }
 
-    internal fun <K> put(key : ComponentContextIdentifier<K>, value : K){
-        backing[key] = value
-    }
 
-    internal inline fun <ReturnType> add(
-        values : Array<out ComponentContextValue<*>>,
-        cb : ()->ReturnType
-    ) : ReturnType {
-        return withComponentContext(
-            context = ComponentContext(
-                parent = this,
-                backing = values.asSequence().map { Pair(it.identifier, it.value) }.toMap(HashMap(values.size))
-            ),
-            cb = cb
-        )
-    }
-}
-
-class ComponentContextIdentifier<T> {
+class ShadeContextIdentifier<T> {
     companion object {
         private val nextIdentifier = AtomicInteger(0)
     }
@@ -59,10 +63,10 @@ class ComponentContextIdentifier<T> {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
-        other as ComponentContextIdentifier<*>
+        other as ShadeContextIdentifier<*>
         if (identifier != other.identifier) return false
         return true
     }
 
-    fun with(value : T) : ComponentContextValue<T> = ComponentContextValue(this, value)
+    fun with(value : T) : ShadeContextValue<T> = ShadeContextValue(this, value)
 }

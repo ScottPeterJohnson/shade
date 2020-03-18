@@ -1,22 +1,22 @@
 package net.justmachinery.shade.routing.base
 
 import net.justmachinery.shade.component.AdvancedComponent
-import net.justmachinery.shade.ComponentContextIdentifier
+import net.justmachinery.shade.ShadeContextIdentifier
 import net.justmachinery.shade.currentContext
 
 
 open class RoutingException(message : String) : RuntimeException(message)
 
-data class RoutingComponentContext(
+data class RoutingContext(
     val pathData: PathData,
     internal var currentPathSegment : Int = 0
 ){
     fun currentPathFragment() = pathData.segmentAtIndex(currentPathSegment)
 
     companion object {
-        fun get(component: AdvancedComponent<*, *>) = currentContext()[routingComponentContextIdentifier]
+        fun get() = currentContext()[routingContextIdentifier]
             ?: throw IllegalStateException("Not currently routing")
     }
 }
-val routingComponentContextIdentifier =
-    ComponentContextIdentifier<RoutingComponentContext>()
+val routingContextIdentifier =
+    ShadeContextIdentifier<RoutingContext>()

@@ -16,8 +16,8 @@ internal fun <RenderIn : Tag> RenderIn.startRoutingInternal(
         globalState.pathData.update(urlTransform(urlInfo))
     }
 
-    val context = RoutingComponentContext(globalState.pathData)
-    component.addContext(routingComponentContextIdentifier, context){
+    val context = RoutingContext(globalState.pathData)
+    component.addContext(routingContextIdentifier, context){
         doRouting(component, cb)
     }
 }
@@ -28,7 +28,7 @@ internal fun <RenderIn : Tag> RenderIn.routeInternal(
     component: AdvancedComponent<*, *>,
     cb : WithRouting<RenderIn>.()->Unit
 ){
-    if(currentContext()[routingComponentContextIdentifier] == null) throw IllegalStateException("Cannot start routing outside of a routing context.")
+    if(currentContext()[routingContextIdentifier] == null) throw IllegalStateException("Cannot start routing outside of a routing context.")
     doRouting(component, cb)
 }
 

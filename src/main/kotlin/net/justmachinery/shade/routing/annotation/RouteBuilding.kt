@@ -6,7 +6,7 @@ import net.justmachinery.shade.currentContext
 import net.justmachinery.shade.routing.base.BasicUrlInfo
 import net.justmachinery.shade.routing.base.ExternalUrlInfo
 import net.justmachinery.shade.routing.base.InternalUrlInfo
-import net.justmachinery.shade.routing.base.routingComponentContextIdentifier
+import net.justmachinery.shade.routing.base.routingContextIdentifier
 
 
 /**
@@ -47,7 +47,7 @@ class FinishedRoute(private val routeBeingBuilt: RouteBeingBuilt) {
      * Replace the client's URL with this path.
      */
     fun navigate(component: AdvancedComponent<*, *>){
-        val routingContext = currentContext()[routingComponentContextIdentifier]
+        val routingContext = currentContext()[routingContextIdentifier]
         if(routingContext != null){
             component.client.executeScript("history.pushState(null, \"\", \"${asExternalUrl()}\")")
             routingContext.pathData.update(asInternalUrlInfo())
