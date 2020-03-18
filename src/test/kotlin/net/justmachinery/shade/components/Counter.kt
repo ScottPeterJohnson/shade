@@ -7,6 +7,8 @@ import kotlinx.html.h2
 import net.justmachinery.shade.*
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.component.PropsType
+import net.justmachinery.shade.state.ObservableValue
+import net.justmachinery.shade.state.observable
 
 class Counter : Component<Unit>() {
     var counter = observable(0)

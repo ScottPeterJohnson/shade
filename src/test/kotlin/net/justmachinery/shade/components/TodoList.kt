@@ -6,6 +6,7 @@ import kotlinx.html.*
 import net.justmachinery.shade.*
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.component.PropsType
+import net.justmachinery.shade.state.observable
 
 class TodoListSection : Component<Unit>() {
     //This is the syntax for an observable piece of per-component state.

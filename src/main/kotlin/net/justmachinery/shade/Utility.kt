@@ -8,7 +8,6 @@ import kotlinx.html.HtmlTagMarker
 import kotlinx.html.style
 import org.intellij.lang.annotations.Language
 import org.slf4j.MDC
-import java.util.concurrent.atomic.AtomicInteger
 
 @HtmlTagMarker
 fun CommonAttributeGroupFacade.withStyle(builder: CSSBuilder.() -> Unit) {
@@ -76,26 +75,50 @@ internal fun <T1: Any, T2: Any> Sequence<T1>.zipAll(other: Sequence<T2>): Sequen
 
 
 internal class SingleConcurrentExecution(private val launch : ()-> Job){
-    private var exclusiveExecution = java.util.concurrent.Semaphore(1)
-    @Volatile private var waiting = AtomicInteger(0)
+    private val runningLock = Object()
+    private var running = false
+    private var waiting = false
+
     fun maybeLaunch(){
-        if(waiting.incrementAndGet() == 1){
-            exclusiveExecution.acquire()
+        val proceed = synchronized(runningLock){
+            if(running){
+                waiting = true
+                false
+            } else {
+                true
+            }
+        }
+        if(proceed){
             launch().invokeOnCompletion {
-                val waitingCount = waiting.getAndSet(0)
-                exclusiveExecution.release()
-                if(waitingCount > 1){
-                    maybeLaunch()
-                }
+                release()
             }
         }
     }
+
     fun runSync(cb : ()->Unit){
-        exclusiveExecution.acquire()
+        synchronized(runningLock){
+            if(running){
+                runningLock.wait()
+            }
+            running = true
+        }
         try {
             cb()
         } finally {
-            exclusiveExecution.release()
+            release()
+        }
+    }
+
+    private fun release(){
+        val wasWaiting = synchronized(runningLock){
+            running = false
+            val wasWaiting = waiting
+            waiting = false
+            runningLock.notify()
+            wasWaiting
+        }
+        if(wasWaiting){
+            maybeLaunch()
         }
     }
 }

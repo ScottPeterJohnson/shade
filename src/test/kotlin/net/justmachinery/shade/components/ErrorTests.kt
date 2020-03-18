@@ -9,16 +9,19 @@ import kotlinx.html.p
 import net.justmachinery.shade.ComponentErrorHandlingContext
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.JavascriptException
-import net.justmachinery.shade.observable
+import net.justmachinery.shade.onErrors
+import net.justmachinery.shade.state.observable
 
 class ErrorTests : Component<Unit>() {
-    private var error by observable<ComponentErrorHandlingContext?>(null)
+    private var error by observable<ComponentErrorHandlingContext?>(
+        null
+    )
     override fun HtmlBlockTag.render() {
         h2 { +"Error collection and coroutines" }
         error?.let {
             p { +"Caught an error in ${it.source}: ${it.throwable}" }
         }
-        catchErrors({
+        onErrors({
             error = this
             true
         }){

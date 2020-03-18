@@ -1,23 +1,6 @@
 package net.justmachinery.shade.component
 
-import com.google.gson.Gson
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.html.*
-import mu.KLogging
-import net.justmachinery.shade.*
-import net.justmachinery.shade.Render
-import net.justmachinery.shade.render.*
-import net.justmachinery.shade.routing.annotation.FinishedRoute
-import net.justmachinery.shade.routing.annotation.Router
-import net.justmachinery.shade.routing.annotation.routingSetNavigate
-import net.justmachinery.shade.routing.base.*
-import net.justmachinery.shade.routing.base.routeInternal
-import net.justmachinery.shade.routing.base.startRoutingInternal
-import java.lang.reflect.ParameterizedType
-import java.util.concurrent.ConcurrentHashMap
-import kotlin.coroutines.CoroutineContext
-import kotlin.reflect.KClass
 
 /**
  * A Component renders a chunk of DOM which can attach server-side callbacks on client-side events.

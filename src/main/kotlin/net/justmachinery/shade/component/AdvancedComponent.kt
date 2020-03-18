@@ -11,6 +11,7 @@ import net.justmachinery.shade.routing.annotation.FinishedRoute
 import net.justmachinery.shade.routing.annotation.Router
 import net.justmachinery.shade.routing.annotation.routingSetNavigate
 import net.justmachinery.shade.routing.base.*
+import net.justmachinery.shade.state.Render
 import kotlin.coroutines.CoroutineContext
 import kotlin.reflect.KClass
 
@@ -52,39 +53,15 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
     open fun unmounted(){}
 
 
-    private val supervisorJob = SupervisorJob(parent = fullProps.client.supervisor)
+
+    internal val supervisorJob = SupervisorJob(parent = fullProps.client.supervisor)
     override val coroutineContext: CoroutineContext get() = supervisorJob
 
-    internal fun RenderIn.doRender(){
-        handleExceptions(ContextErrorSource.RENDER){
-            render()
-        }
-    }
-    internal fun doMount(){
-        handleExceptions(ContextErrorSource.MOUNTING){
-            mounted()
-        }
-    }
-    internal fun doUnmount(){
-        renderState.renderTreeRoot?.let {
-            unmountAll(it)
-        }
 
-        client.markDontRerender(this)
-        renderDependencies.dispose()
-        supervisorJob.cancel()
+    //Implementation note: Where possible, functionality using components should be defined in extension functions to
+    //keep this file reasonably compact.
+    //This can't be done for those that requires an additional receiver, unfortunately.
 
-        renderDependencies.component = null
-
-        handleExceptions(ContextErrorSource.UNMOUNTING){
-            //Unmount children
-            unmounted()
-        }
-    }
-
-    //This allows for the render() function to work despite there being no ergonomic way to have both a fresh RenderIn tag and
-    //a fresh component receiver for the passed-in function.
-    private fun realComponentThis() = this.renderState.renderingFunction ?: this
 
     //Routing functions
     /**
@@ -130,22 +107,6 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
         }
 
     //Useful helper functions and aliases
-    /**
-     * Adds or replaces a value in the current context, creating a new context for the duration of the cb() block.
-     */
-    fun <R,T> addContext(identifier: ShadeContextIdentifier<R>, value : R, cb : ()->T) = currentContext().add(arrayOf(
-        ShadeContextValue(identifier, value)
-    ), cb)
-
-    /**
-     * See [addContext]
-     */
-    fun <T> addContext(vararg values : ShadeContextValue<*>, cb: ()->T) = currentContext().add(values, cb)
-
-    fun <T> catchErrors(onError: ComponentErrorHandlingContext.()->Boolean, cb: ()->T) : T {
-        return currentContext().addErrorHandler(onError, cb)
-    }
-
     /**
      * See [add]
      */

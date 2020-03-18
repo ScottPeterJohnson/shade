@@ -2,6 +2,8 @@ package net.justmachinery.shade
 
 import kotlinx.html.*
 import net.justmachinery.shade.component.Component
+import net.justmachinery.shade.state.computed
+import net.justmachinery.shade.state.react
 
 class ComputedState : Component<Unit>() {
     var firstNumber by react(5)

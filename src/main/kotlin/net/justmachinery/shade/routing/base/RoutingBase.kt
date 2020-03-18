@@ -4,8 +4,8 @@ import net.justmachinery.shade.component.AdvancedComponent
 import net.justmachinery.shade.ShadeContextIdentifier
 import net.justmachinery.shade.currentContext
 
-
 open class RoutingException(message : String) : RuntimeException(message)
+class PathNotFoundException(message : String) : RoutingException(message)
 
 data class RoutingContext(
     val pathData: PathData,

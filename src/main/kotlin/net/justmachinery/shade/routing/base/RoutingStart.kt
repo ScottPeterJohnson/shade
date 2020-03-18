@@ -3,6 +3,9 @@ package net.justmachinery.shade.routing.base
 import kotlinx.html.Tag
 import net.justmachinery.shade.*
 import net.justmachinery.shade.component.AdvancedComponent
+import net.justmachinery.shade.state.ChangeBatchChangePolicy
+import net.justmachinery.shade.state.runChangeBatch
+import kotlin.reflect.KClass
 
 internal fun <RenderIn : Tag> RenderIn.startRoutingInternal(
     component: AdvancedComponent<*, *>,
@@ -12,7 +15,7 @@ internal fun <RenderIn : Tag> RenderIn.startRoutingInternal(
 ) {
     val globalState = component.client.ensureGlobalRouting(urlTransform)
 
-    runChangeBatch(force = true) {
+    runChangeBatch(ChangeBatchChangePolicy.FORCE_ALLOWED) {
         globalState.pathData.update(urlTransform(urlInfo))
     }
 
@@ -37,15 +40,11 @@ private fun <RenderIn : Tag> RenderIn.doRouting(
     cb : WithRouting<RenderIn>.()->Unit
 ){
     component.run {
-        //Run in render block for efficiency + to permanently capture routing context
-        renderWithNewComponent { component ->
-            val routing = WithRouting(
-                component,
-                this@renderWithNewComponent
-            )
-            cb(routing)
-            routing.finish()
-        }
+        @Suppress("UNCHECKED_CAST")
+        add(
+            component = RoutingComponent::class as KClass<RoutingComponent<RenderIn>>,
+            props = RoutingComponent.Props(cb = cb, realCb = cb, parent = component)
+        )
     }
 }
 

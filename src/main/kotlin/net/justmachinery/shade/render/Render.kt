@@ -11,7 +11,10 @@ import kotlinx.html.visit
 import net.justmachinery.shade.*
 import net.justmachinery.shade.component.AdvancedComponent
 import net.justmachinery.shade.component.ComponentInitData
-import net.justmachinery.shade.component.FunctionComponent
+import net.justmachinery.shade.component.CallbackWrappingComponent
+import net.justmachinery.shade.component.doMount
+import net.justmachinery.shade.state.ChangeBatchChangePolicy
+import net.justmachinery.shade.state.runChangeBatch
 import org.apache.commons.text.StringEscapeUtils
 import java.io.ByteArrayOutputStream
 import java.util.*
@@ -29,7 +32,7 @@ internal data class ComponentRenderState(
     var renderTreePathToCallbackId : BiMap<Pair<RenderTreeTagLocation, String>, Long> = HashBiMap.create(0),
     //Temporary storage is necessary due to Kotlin's current lack of functions with two receivers,
     //as a hacky workaround.
-    var renderingFunction : FunctionComponent<*>? = null
+    var currentComponentOverride : CallbackWrappingComponent<*,*>? = null
 )
 
 internal fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.renderInternal(tag : RenderIn, addMarkers : Boolean){
@@ -45,13 +48,19 @@ internal fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.renderInternal(tag 
     try {
         withShadeContext(baseContext){
             tag.run {
-                updateRenderTree(renderState) {
-                    this@renderInternal.renderDependencies.runRecordingDependencies {
-                        runRenderNoChangesAllowed {
-                            this.doRender()
+                //Note that outermost here is the change batch that by default disallows changes, but may have a few crop up anyway (e.g. due to errors in render)
+                //It's important that component dependencies are recorded before the change batch processes such changes, since the component
+                //might rely on a dependency changed in render (and may need to immediately rerender)
+                runChangeBatch(ChangeBatchChangePolicy.DISALLOWED, block = {
+                    updateRenderTree(renderState) {
+                        this@renderInternal.renderDependencies.runRecordingDependencies {
+                            handleExceptions(ContextErrorSource.RENDER){
+                                this.render()
+                            }
                         }
                     }
-                }
+                })
+                Unit
             }
         }
     } finally {

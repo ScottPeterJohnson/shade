@@ -5,6 +5,7 @@ import kotlinx.coroutines.slf4j.MDCContext
 import kotlinx.html.Tag
 import mu.KLogging
 import net.justmachinery.shade.component.AdvancedComponent
+import net.justmachinery.shade.component.doMount
 import net.justmachinery.shade.render.renderInternal
 import net.justmachinery.shade.render.updateRender
 import org.intellij.lang.annotations.Language

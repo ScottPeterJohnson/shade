@@ -1,7 +1,8 @@
 package net.justmachinery.shade.routing.base
 
-import net.justmachinery.shade.ObservableValue
+import net.justmachinery.shade.state.ObservableValue
 import net.justmachinery.shade.mergeMut
+import net.justmachinery.shade.state.observable
 import org.apache.http.client.utils.URLEncodedUtils
 import org.apache.http.message.BasicNameValuePair
 import java.nio.charset.Charset
@@ -17,13 +18,16 @@ class PathData {
     }
     fun getParam(name : String): ObservableValue<String?> {
         return synchronized(queryParams){
-            queryParams.getOrPut(name){ObservableValue(null) }
+            queryParams.getOrPut(name){ ObservableValue(null) }
         }
     }
+
+    var updateIdentifier = observable(0)
 
     internal fun update(urlInfo: UrlInfo){
         updateMap(pathParts, urlInfo.pathSegments.mapIndexed { index, it -> index to it })
         updateMap(queryParams, urlInfo.queryParams)
+        updateIdentifier.set(updateIdentifier._value + 1)
     }
 
     private fun <T : Any> updateMap(map : MutableMap<T, ObservableValue<String?>>, entries : Sequence<Pair<T,String>>){

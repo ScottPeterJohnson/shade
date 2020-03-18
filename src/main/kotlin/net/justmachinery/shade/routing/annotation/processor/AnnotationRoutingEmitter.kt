@@ -4,7 +4,7 @@ import arrow.core.Either
 import com.squareup.kotlinpoet.*
 import kotlinx.html.Tag
 import net.justmachinery.shade.component.AdvancedComponent
-import net.justmachinery.shade.ObservableValue
+import net.justmachinery.shade.state.ObservableValue
 import net.justmachinery.shade.routing.annotation.*
 import net.justmachinery.shade.routing.base.WithRouting
 import java.io.File
@@ -92,7 +92,7 @@ internal class AnnotationRoutingEmitter(val routeData: RouteData) {
         support.addSuperinterface(ParamsHolderSupport::class)
 
 
-        val computed = MemberName("net.justmachinery.shade", "computed")
+        val computed = MemberName("net.justmachinery.shade.state", "computed")
         params.forEach { param ->
             supportConstructor.addParameter(param.name, ObservableValue::class.parameterizedBy(String::class.asTypeName().copy(nullable = true)))
             supportConstructor.addParameter(param.name + "_spec", QueryParam::class.parameterizedBy(param.type))
@@ -177,7 +177,7 @@ internal class AnnotationRoutingEmitter(val routeData: RouteData) {
         if(data.notFoundHandlers.isNotEmpty()){
             func.beginControlFlow("notFound")
             data.notFoundHandlers.forEach { notFound ->
-                func.addStatement("spec.${notFound.name}()")
+                func.addStatement("this.${notFound.name}()")
             }
             func.endControlFlow()
         }

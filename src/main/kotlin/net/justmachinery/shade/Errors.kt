@@ -1,6 +1,8 @@
 package net.justmachinery.shade
 
 import net.justmachinery.shade.component.AdvancedComponent
+import net.justmachinery.shade.state.ChangeBatchChangePolicy
+import net.justmachinery.shade.state.runChangeBatch
 
 data class ContextErrorHandler(
     private val previous : ContextErrorHandler?,
@@ -10,11 +12,11 @@ data class ContextErrorHandler(
         context : ComponentErrorHandlingContext,
         client : Client
     ) : Boolean {
-        return runChangeBatch(force = true){
-            client.swallowExceptions({ "While handling $context" }){
-                var handler : ContextErrorHandler? = this
-                while(handler != null){
-                    if(handler.handle(context)){
+        return runChangeBatch(ChangeBatchChangePolicy.FORCE_ALLOWED) {
+            client.swallowExceptions({ "While handling $context" }) {
+                var handler: ContextErrorHandler? = this
+                while (handler != null) {
+                    if (handler.handle(context)) {
                         break
                     } else {
                         handler = handler.previous
@@ -56,8 +58,12 @@ internal fun <T> AdvancedComponent<*,*>.handleExceptions(source: ContextErrorSou
     }
 }
 
-
-fun <T> ShadeContext.addErrorHandler(errorHandler: ComponentErrorHandlingContext.()->Boolean, cb : ()->T) : T {
-    val current = this[ERROR_HANDLER_IDENTIFIER]
-    return this.add(arrayOf(ERROR_HANDLER_IDENTIFIER.with(ContextErrorHandler(previous = current, handle = errorHandler))), cb)
+fun <T> AdvancedComponent<*,*>.onErrors(onError: ComponentErrorHandlingContext.()->Boolean, cb: ()->T) : T? {
+    val currentContext = currentContext()
+    return addContext(ERROR_HANDLER_IDENTIFIER.with(ContextErrorHandler(previous = currentContext[ERROR_HANDLER_IDENTIFIER], handle = onError))
+    ){
+        handleExceptions(ContextErrorSource.RENDER){
+            cb()
+        }
+    }
 }

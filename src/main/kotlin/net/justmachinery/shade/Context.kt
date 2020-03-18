@@ -1,5 +1,6 @@
 package net.justmachinery.shade
 
+import net.justmachinery.shade.component.AdvancedComponent
 import java.util.concurrent.atomic.AtomicInteger
 
 fun currentContext() = contextInRenderingThread.get() ?: ShadeContext.empty
@@ -47,9 +48,6 @@ internal inline fun <T> withShadeContext(context : ShadeContext, cb : ()->T) : T
 
 class ShadeContextValue<T>(val identifier : ShadeContextIdentifier<T>, val value : T)
 
-
-
-
 class ShadeContextIdentifier<T> {
     companion object {
         private val nextIdentifier = AtomicInteger(0)
@@ -70,3 +68,17 @@ class ShadeContextIdentifier<T> {
 
     fun with(value : T) : ShadeContextValue<T> = ShadeContextValue(this, value)
 }
+
+/**
+ * Adds or replaces a value in the current context, creating a new context for the duration of the cb() block.
+ */
+@Suppress("unused")
+fun <R,T> AdvancedComponent<*,*>.addContext(identifier: ShadeContextIdentifier<R>, value : R, cb : ()->T) = currentContext().add(arrayOf(
+    ShadeContextValue(identifier, value)
+), cb)
+
+/**
+ * See [addContext]
+ */
+@Suppress("unused")
+fun <T> AdvancedComponent<*, *>.addContext(vararg values : ShadeContextValue<*>, cb: ()->T) = currentContext().add(values, cb)

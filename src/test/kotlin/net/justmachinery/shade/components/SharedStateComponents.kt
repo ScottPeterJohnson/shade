@@ -5,7 +5,7 @@ import kotlinx.html.div
 import kotlinx.html.h2
 import kotlinx.html.input
 import net.justmachinery.shade.component.Component
-import net.justmachinery.shade.react
+import net.justmachinery.shade.state.react
 
 //This file shows sharing state between components, by passing it in via props
 
