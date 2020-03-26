@@ -1,17 +1,18 @@
 package net.justmachinery.shade
 
 import com.google.gson.Gson
+import kotlinx.coroutines.Dispatchers
 import kotlinx.html.HtmlBlockTag
 import kotlinx.html.Tag
 import kotlinx.html.script
 import kotlinx.html.unsafe
 import mu.KLogging
 import net.justmachinery.shade.component.*
-import net.justmachinery.shade.component.componentPassProps
 import java.time.Duration
 import java.util.*
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.CoroutineContext
 import kotlin.reflect.KClass
 import kotlin.reflect.full.isSubclassOf
 
@@ -41,7 +42,12 @@ class ShadeRoot(
      * For testing purposes.
      * An extra delay to add before passing receiving or sending any messages to the client, to simulate poor connections.
      */
-    var simulateExtraDelay : Duration? = null
+    var simulateExtraDelay : Duration? = null,
+
+    /**
+     * Base context used to launch all coroutines by default.
+     */
+    val context : CoroutineContext = Dispatchers.Default
 ) {
     companion object : KLogging() {
         private val shadeScript = ClassLoader.getSystemClassLoader().getResource("shade.js")!!.readText()

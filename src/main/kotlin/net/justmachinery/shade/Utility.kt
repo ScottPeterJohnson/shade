@@ -143,3 +143,14 @@ internal fun <T1: Any, T2: Any, T3 : Any> MutableMap<T1,T2>.mergeMut(other: Sequ
 }
 
 typealias RenderFunction<RenderIn> = RenderIn.()->Unit
+
+sealed class ErrorOr<T> {
+    data class Error<T>(val exception: Exception) : ErrorOr<T>()
+    data class Result<T>(val result : T) : ErrorOr<T>()
+
+    fun isResult() = this is Result
+    fun unwrap() : T = when(this){
+        is Error -> throw this.exception
+        is Result -> this.result
+    }
+}

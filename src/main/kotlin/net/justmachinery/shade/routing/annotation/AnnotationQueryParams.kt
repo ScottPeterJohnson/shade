@@ -1,6 +1,6 @@
 package net.justmachinery.shade.routing.annotation
 
-import arrow.core.Either
+import net.justmachinery.shade.ErrorOr
 import net.justmachinery.shade.routing.base.RoutingException
 
 interface QueryParamSpec {
@@ -29,13 +29,13 @@ interface QueryParam<T> {
 
     fun optional() = OptionalParam(this)
 
-    fun tryParse(value : String?) : Either<T, Exception> {
+    fun tryParse(value : String?) : ErrorOr<T> {
         return if(value == null){
             if(this is OptionalParam<T>){
                 @Suppress("UNCHECKED_CAST")
-                Either.left(null as T)
+                ErrorOr.Result(null as T)
             } else {
-                Either.right(
+                ErrorOr.Error(
                     QueryParamNotFoundException(
                         name
                     )
@@ -43,9 +43,9 @@ interface QueryParam<T> {
             }
         } else {
             try {
-                Either.left(parse(value))
+                ErrorOr.Result(parse(value))
             } catch(t : Throwable){
-                Either.right(
+                ErrorOr.Error<T>(
                     QueryParamParseException(
                         name,
                         value

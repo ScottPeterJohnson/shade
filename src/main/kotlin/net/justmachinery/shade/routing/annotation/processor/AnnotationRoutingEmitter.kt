@@ -1,12 +1,12 @@
 package net.justmachinery.shade.routing.annotation.processor
 
-import arrow.core.Either
 import com.squareup.kotlinpoet.*
 import kotlinx.html.Tag
+import net.justmachinery.shade.ErrorOr
 import net.justmachinery.shade.component.AdvancedComponent
-import net.justmachinery.shade.state.ObservableValue
 import net.justmachinery.shade.routing.annotation.*
 import net.justmachinery.shade.routing.base.WithRouting
+import net.justmachinery.shade.state.ObservableValue
 import java.io.File
 import kotlin.reflect.KClass
 
@@ -97,19 +97,19 @@ internal class AnnotationRoutingEmitter(val routeData: RouteData) {
             supportConstructor.addParameter(param.name, ObservableValue::class.parameterizedBy(String::class.asTypeName().copy(nullable = true)))
             supportConstructor.addParameter(param.name + "_spec", QueryParam::class.parameterizedBy(param.type))
             support.addProperty(
-                PropertySpec.builder(param.name, Either::class.asTypeName().parameterizedBy(param.type, Exception::class.asTypeName()))
+                PropertySpec.builder(param.name, ErrorOr::class.asTypeName().parameterizedBy(param.type))
                     .delegate("%M { ${param.name}_spec.tryParse(${param.name}.value) }", computed)
                     .build()
             )
             paramsHolder.addProperty(
                 PropertySpec.builder(param.name, param.type)
-                    .getter(FunSpec.getterBuilder().addCode("return support.${param.name}.fold({ it }, { throw it })").build())
+                    .getter(FunSpec.getterBuilder().addCode("return support.${param.name}.unwrap()").build())
                     .build()
             )
         }
         support.addProperty(PropertySpec.builder("allValid", Boolean::class)
             .addModifiers(KModifier.OVERRIDE)
-            .delegate("%M { ${params.joinToString(" && "){ "this." + it.name + ".isLeft()" } } }", computed)
+            .delegate("%M { ${params.joinToString(" && "){ "this." + it.name + ".isResult()" } } }", computed)
             .build())
 
         support.primaryConstructor(supportConstructor.build())

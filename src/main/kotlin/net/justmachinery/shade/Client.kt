@@ -127,7 +127,7 @@ class Client(
     private val eventQueue : Queue<Pair<CallbackData, Json?>> = ArrayDeque()
 
     internal val supervisor = SupervisorJob()
-    internal val coroutineScope = CoroutineScope(supervisor)
+    internal val coroutineScope = CoroutineScope(root.context + supervisor)
 
     internal fun cleanup(){
         //Most cleanup will be handled by the garbage collector.
