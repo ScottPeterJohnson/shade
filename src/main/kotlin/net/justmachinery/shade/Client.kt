@@ -131,7 +131,7 @@ class Client(
 
     internal fun cleanup(){
         //Most cleanup will be handled by the garbage collector.
-        GlobalScope.launch {
+        GlobalScope.launch(root.context) {
             supervisor.cancel()
         }
     }
@@ -283,6 +283,8 @@ class Client(
 
     private val handlerLock = Object()
     @Volatile private var handler : ShadeRoot.MessageHandler? = null
+
+    fun connected() = handler == null
 
     private data class QueuedMessage(val errorTag : String?, val message : String)
     private var javascriptQueue : MutableList<QueuedMessage>? = Collections.synchronizedList(mutableListOf())

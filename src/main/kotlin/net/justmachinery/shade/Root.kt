@@ -2,6 +2,9 @@ package net.justmachinery.shade
 
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.html.HtmlBlockTag
 import kotlinx.html.Tag
 import kotlinx.html.script
@@ -10,8 +13,6 @@ import mu.KLogging
 import net.justmachinery.shade.component.*
 import java.time.Duration
 import java.util.*
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import kotlin.coroutines.CoroutineContext
 import kotlin.reflect.KClass
 import kotlin.reflect.full.isSubclassOf
@@ -47,7 +48,11 @@ class ShadeRoot(
     /**
      * Base context used to launch all coroutines by default.
      */
-    val context : CoroutineContext = Dispatchers.Default
+    val context : CoroutineContext = Dispatchers.Default,
+
+    //Maximum acceptable delay between a client loading a page and connecting back via websocket before its data is removed
+    //(and it has to reload the page if it wants to add interactivity)
+    val maximumAcceptableConnectionDelay : Duration = Duration.ofSeconds(30)
 ) {
     companion object : KLogging() {
         private val shadeScript = ClassLoader.getSystemClassLoader().getResource("shade.js")!!.readText()
@@ -77,7 +82,24 @@ class ShadeRoot(
         return component
     }
 
-    fun <T : Any, RenderIn : Tag> component(
+    /**
+     * Installs the Shade framework and begins rendering within cb()
+     */
+    fun render(tag : HtmlBlockTag, cb : (ShadeRootComponent.()->Unit)){
+        installFramework(tag){client ->
+            renderComponentAsRoot(client, tag, ShadeRootComponent::class, cb)
+        }
+    }
+
+    /**
+     * As render, but does not create a new client (and can be used multiple times on a page)
+     */
+    fun renderWithClient(client: Client, tag : HtmlBlockTag, cb : (ShadeRootComponent.()->Unit)){
+        renderComponentAsRoot(client, tag, ShadeRootComponent::class, cb)
+    }
+
+
+    private fun <T : Any, RenderIn : Tag> renderComponentAsRoot(
         client : Client,
         builder : RenderIn,
         root : KClass<out AdvancedComponent<T, RenderIn>>,
@@ -95,14 +117,28 @@ class ShadeRoot(
         client.renderRoot(builder, component)
     }
 
-    fun installFramework(builder : HtmlBlockTag, cb : (Client)-> Unit){
+    /**
+     * Just installs the framework into an HTML builder, creating a new client object.
+     * You probably don't want to use this directly.
+     */
+    fun installFramework(tag : HtmlBlockTag, cb : (Client)-> Unit){
         val id = UUID.randomUUID()
+
         val client = Client(id, this)
+
+        client.coroutineScope.launch {
+            delay(maximumAcceptableConnectionDelay.toMillis())
+            if(!client.connected()){
+                val data = clientDataMap.remove(id)
+                data?.cleanup()
+            }
+        }
+
         clientDataMap[id] = client
         withLoggingInfo("shadeClientId" to id.toString()){
             logger.info { "Created new client id" }
         }
-        builder.run {
+        tag.run {
             script {
                 async = true
                 unsafe {
@@ -136,9 +172,10 @@ class ShadeRoot(
             if (simulateExtraDelay == null) {
                 send("${errorTag ?: ""}|$message")
             } else {
-                delayExecutor.schedule({
+                GlobalScope.launch(context){
+                    delay(simulateExtraDelay!!.toMillis())
                     send("${errorTag ?: ""}|$message")
-                }, simulateExtraDelay!!.toMillis(), TimeUnit.MILLISECONDS)
+                }
             }
         }
         /**
@@ -150,9 +187,10 @@ class ShadeRoot(
             if (simulateExtraDelay == null) {
                 processMessage(message)
             } else {
-                delayExecutor.schedule({
+                GlobalScope.launch(context){
+                    delay(simulateExtraDelay!!.toMillis())
                     processMessage(message)
-                }, simulateExtraDelay!!.toMillis(), TimeUnit.MILLISECONDS)
+                }
             }
         }
 
@@ -161,7 +199,13 @@ class ShadeRoot(
                 withLoggingInfo("shadeClientId" to clientId.toString()){
                     logger.trace { "Message received: ${message.ellipsizeAfter(200)}" }
                     if(clientData == null){
-                        clientId = UUID.fromString(message)!!
+                        try {
+                            clientId = UUID.fromString(message)!!
+                        } catch(t : IllegalArgumentException){
+                            logger.info { "Not a UUID: ${message.ellipsizeAfter(200)}" }
+                            disconnect()
+                            return
+                        }
                         clientData = clientDataMap[clientId]
                         if(clientData == null){
                             logger.info { "Client ID expired or invalid: $clientId" }
@@ -202,17 +246,11 @@ class ShadeRoot(
                 }
             }
         }
-
-        private val delayExecutor by lazy { Executors.newSingleThreadScheduledExecutor() }
     }
 }
 
-fun <Props : Any, RenderIn : HtmlBlockTag> RenderIn.installRoot(root: ShadeRoot, component : KClass<out AdvancedComponent<Props, RenderIn>>, props : Props){
-    root.installFramework(this){
-        root.component(it, this, component, props)
+class ShadeRootComponent : Component<ShadeRootComponent.()->Unit>() {
+    override fun HtmlBlockTag.render() {
+        props()
     }
-}
-
-fun <Props : PropsType<Props, T>, T : AdvancedComponent<Props, RenderIn>, RenderIn : HtmlBlockTag> RenderIn.installRoot(root: ShadeRoot, props : Props){
-    installRoot(root, props.type, props)
 }

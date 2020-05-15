@@ -38,17 +38,12 @@ fun main(){
                         +"Shade test page"
                     }
                     //Let's throw some shade:
-                    root.installFramework(this){ client ->
-                        root.component(
-                            client = client,
-                            builder = this,
-                            //Look at RootComponent for a more in-depth overview of how to render with shade
-                            root = RootComponent::class,
-                            props = UrlInfo.of(
-                                request.pathInfo(),
-                                request.queryString()
-                            )
-                        )
+                    root.render(this){
+                        //Look at RootComponent for a more in-depth overview of how to render with shade
+                        add(RootComponent::class, UrlInfo.of(
+                            request.pathInfo(),
+                            request.queryString()
+                        ))
                     }
                 }
             }
