@@ -8,13 +8,16 @@ import kotlinx.html.Tag
 import kotlinx.html.TagConsumer
 import kotlinx.html.stream.appendHTML
 import kotlinx.html.visit
-import net.justmachinery.shade.*
+import net.justmachinery.shade.ContextErrorSource
 import net.justmachinery.shade.component.AdvancedComponent
-import net.justmachinery.shade.component.ComponentInitData
 import net.justmachinery.shade.component.CallbackWrappingComponent
+import net.justmachinery.shade.component.ComponentInitData
 import net.justmachinery.shade.component.doMount
+import net.justmachinery.shade.contextInRenderingThread
+import net.justmachinery.shade.handleExceptions
 import net.justmachinery.shade.state.ChangeBatchChangePolicy
 import net.justmachinery.shade.state.runChangeBatch
+import net.justmachinery.shade.withShadeContext
 import org.apache.commons.text.StringEscapeUtils
 import java.io.ByteArrayOutputStream
 import java.util.*
@@ -106,7 +109,9 @@ fun <T : Any, RenderIn : Tag> addComponent(
         GetComponentResult.NEW, GetComponentResult.EXISTING_RERENDER -> {
             comp.renderInternal(block, addMarkers = true)
             if(renderType == GetComponentResult.NEW){
-                comp.doMount()
+                runChangeBatch(ChangeBatchChangePolicy.FORCE_ALLOWED){
+                    comp.doMount()
+                }
             }
         }
         GetComponentResult.EXISTING_KEEP -> {
