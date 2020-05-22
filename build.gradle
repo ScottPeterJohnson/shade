@@ -14,7 +14,7 @@ apply plugin: 'maven'
 apply plugin: 'maven-publish'
 
 group 'net.justmachinery'
-version '0.3.3'
+version '0.3.4'
 
 task testServer(type: JavaExec){
     classpath = sourceSets.test.runtimeClasspath

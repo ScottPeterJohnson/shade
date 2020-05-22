@@ -284,7 +284,7 @@ class Client(
     private val handlerLock = Object()
     @Volatile private var handler : ShadeRoot.MessageHandler? = null
 
-    fun connected() = handler == null
+    fun connected() = handler != null
 
     private data class QueuedMessage(val errorTag : String?, val message : String)
     private var javascriptQueue : MutableList<QueuedMessage>? = Collections.synchronizedList(mutableListOf())
