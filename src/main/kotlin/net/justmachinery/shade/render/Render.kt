@@ -14,7 +14,7 @@ import net.justmachinery.shade.component.CallbackWrappingComponent
 import net.justmachinery.shade.component.ComponentInitData
 import net.justmachinery.shade.component.doMount
 import net.justmachinery.shade.contextInRenderingThread
-import net.justmachinery.shade.handleExceptions
+import net.justmachinery.shade.handlingErrors
 import net.justmachinery.shade.state.ChangeBatchChangePolicy
 import net.justmachinery.shade.state.runChangeBatch
 import net.justmachinery.shade.withShadeContext
@@ -57,7 +57,7 @@ internal fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.renderInternal(tag 
                 runChangeBatch(ChangeBatchChangePolicy.DISALLOWED, block = {
                     updateRenderTree(renderState) {
                         this@renderInternal.renderDependencies.runRecordingDependencies {
-                            handleExceptions(ContextErrorSource.RENDER){
+                            handlingErrors(ContextErrorSource.RENDER){
                                 this.render()
                             }
                         }

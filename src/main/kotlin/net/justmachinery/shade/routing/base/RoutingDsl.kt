@@ -9,7 +9,7 @@ import net.justmachinery.shade.addContext
 import net.justmachinery.shade.component.CallbackWrappingComponent
 import net.justmachinery.shade.component.ComponentInitData
 import net.justmachinery.shade.currentContext
-import net.justmachinery.shade.onErrors
+import net.justmachinery.shade.handleErrors
 import net.justmachinery.shade.state.observable
 import net.justmachinery.shade.routing.annotation.ParamsHolderSupport
 import net.justmachinery.shade.routing.annotation.RoutedPage
@@ -116,7 +116,7 @@ internal class RoutingComponent<RenderIn : Tag>(fullProps : ComponentInitData<Pr
             }
         } else {
             if(hasNotFoundHandlers){
-                onErrors({
+                handleErrors({
                     if(throwable is PathNotFoundException){
                         lastPathUpdate = pathData.updateIdentifier._value
                         error = throwable

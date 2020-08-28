@@ -6,7 +6,7 @@ import kotlinx.html.*
 import net.justmachinery.shade.ComponentErrorHandlingContext
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.JavascriptException
-import net.justmachinery.shade.onErrors
+import net.justmachinery.shade.handleErrors
 import net.justmachinery.shade.state.observable
 
 class ErrorTests : Component<Unit>() {
@@ -22,7 +22,7 @@ class ErrorTests : Component<Unit>() {
         error?.let {
             p { +"Caught an error in ${it.source}: ${it.throwable}" }
         }
-        onErrors({
+        handleErrors({
             if(throwable !is UncatchableError){
                 error = this
                 true
@@ -56,7 +56,7 @@ class ErrorTests : Component<Unit>() {
             }
 
             div {
-                onErrors({
+                handleErrors({
                     println("$throwable was caught")
                     throwable is ErrorTestException
                 }){

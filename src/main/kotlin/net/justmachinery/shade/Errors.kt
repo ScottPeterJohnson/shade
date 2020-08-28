@@ -45,7 +45,7 @@ data class ComponentErrorHandlingContext(
     val throwable : Throwable
 )
 
-internal fun <T> AdvancedComponent<*,*>.handleExceptions(source: ContextErrorSource, cb : ()->T) : T? {
+internal fun <T> AdvancedComponent<*,*>.handlingErrors(source: ContextErrorSource, cb : ()->T) : T? {
     val handler = currentContext()[ERROR_HANDLER_IDENTIFIER]
     return try {
         cb()
@@ -58,11 +58,11 @@ internal fun <T> AdvancedComponent<*,*>.handleExceptions(source: ContextErrorSou
     }
 }
 
-fun <T> AdvancedComponent<*,*>.onErrors(onError: ComponentErrorHandlingContext.()->Boolean, cb: ()->T) : T? {
+fun <T> AdvancedComponent<*,*>.handleErrors(onError: ComponentErrorHandlingContext.()->Boolean, cb: ()->T) : T? {
     val currentContext = currentContext()
     return addContext(ERROR_HANDLER_IDENTIFIER.with(ContextErrorHandler(previous = currentContext[ERROR_HANDLER_IDENTIFIER], handle = onError))
     ){
-        handleExceptions(ContextErrorSource.RENDER){
+        handlingErrors(ContextErrorSource.RENDER){
             cb()
         }
     }

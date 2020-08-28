@@ -4,7 +4,7 @@ import kotlinx.html.Tag
 import net.justmachinery.shade.Client
 import net.justmachinery.shade.ContextErrorSource
 import net.justmachinery.shade.ShadeContext
-import net.justmachinery.shade.handleExceptions
+import net.justmachinery.shade.handlingErrors
 import net.justmachinery.shade.render.unmountAll
 import kotlin.reflect.KClass
 
@@ -25,7 +25,7 @@ internal val componentPassProps = ThreadLocal<ComponentInitData<*>?>()
 
 
 internal fun AdvancedComponent<*,*>.doMount(){
-    handleExceptions(ContextErrorSource.MOUNTING){
+    handlingErrors(ContextErrorSource.MOUNTING){
         mounted()
     }
 }
@@ -40,7 +40,7 @@ internal fun AdvancedComponent<*,*>.doUnmount(){
 
     renderDependencies.component = null
 
-    handleExceptions(ContextErrorSource.UNMOUNTING){
+    handlingErrors(ContextErrorSource.UNMOUNTING){
         //Unmount children
         unmounted()
     }
