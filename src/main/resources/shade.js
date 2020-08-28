@@ -66,7 +66,16 @@
     }
     function patchChildren(dom, appendStart, domChildren, replacementChildren) {
         const final = reconcileChildren(domChildren, replacementChildren, false);
-        const endOfPatchRange = domChildren.length > 0 ? domChildren[domChildren.length - 1].nextSibling : null;
+        let endOfPatchRange;
+        if (domChildren.length > 0) {
+            endOfPatchRange = domChildren[domChildren.length - 1].nextSibling;
+        }
+        else if (appendStart) {
+            endOfPatchRange = appendStart.nextSibling;
+        }
+        else {
+            endOfPatchRange = null;
+        }
         let current = appendStart ? appendStart : "start";
         function afterCurrent() {
             if (current == "start") {

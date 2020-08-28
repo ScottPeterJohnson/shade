@@ -75,7 +75,14 @@
         replacementChildren : ChildNodeListLike
     ){
         const final = reconcileChildren(domChildren, replacementChildren, false);
-        const endOfPatchRange = domChildren.length > 0 ? domChildren[domChildren.length-1].nextSibling : null;
+        let endOfPatchRange : Node|null;
+        if(domChildren.length > 0) {
+            endOfPatchRange = domChildren[domChildren.length - 1].nextSibling;
+        } else if (appendStart){
+            endOfPatchRange = appendStart.nextSibling;
+        } else {
+            endOfPatchRange = null;
+        }
 
         let current : Node|"start"|"end" = appendStart ? appendStart : "start";
         function afterCurrent() : Node|"end" {
