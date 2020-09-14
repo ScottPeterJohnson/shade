@@ -1,8 +1,8 @@
 package net.justmachinery.shade.routing.base
 
-import net.justmachinery.shade.state.ObservableValue
 import net.justmachinery.shade.mergeMut
-import net.justmachinery.shade.state.observable
+import net.justmachinery.shade.state.ObservableValue
+import net.justmachinery.shade.state.obs
 import org.apache.http.client.utils.URLEncodedUtils
 import org.apache.http.message.BasicNameValuePair
 import java.nio.charset.Charset
@@ -22,7 +22,7 @@ class PathData {
         }
     }
 
-    var updateIdentifier = observable(0)
+    var updateIdentifier = obs(0)
 
     internal fun update(urlInfo: UrlInfo){
         updateMap(pathParts, urlInfo.pathSegments.mapIndexed { index, it -> index to it })

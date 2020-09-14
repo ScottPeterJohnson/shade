@@ -3,6 +3,7 @@ package net.justmachinery.shade.render
 import com.google.common.collect.BiMap
 import com.google.common.collect.HashBiMap
 import com.google.common.collect.Sets
+import com.google.gson.Gson
 import kotlinx.html.SCRIPT
 import kotlinx.html.Tag
 import kotlinx.html.TagConsumer
@@ -18,7 +19,6 @@ import net.justmachinery.shade.handlingErrors
 import net.justmachinery.shade.state.ChangeBatchChangePolicy
 import net.justmachinery.shade.state.runChangeBatch
 import net.justmachinery.shade.withShadeContext
-import org.apache.commons.text.StringEscapeUtils
 import java.io.ByteArrayOutputStream
 import java.util.*
 import kotlin.reflect.KClass
@@ -90,8 +90,9 @@ internal fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.updateRender(clazz 
         baos.toString(Charsets.UTF_8)
     }
 
-    val escapedHtml = StringEscapeUtils.escapeEcmaScript(html)
-    client.executeScript("r(${renderState.componentId},\"$escapedHtml\");")
+
+    val escapedHtml = Gson().toJson(html)
+    client.executeScript("r(${renderState.componentId},$escapedHtml);")
 }
 
 

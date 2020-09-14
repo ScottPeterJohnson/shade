@@ -53,7 +53,7 @@ fun main(){
     }
     //Open the browser for this demo if we can
     if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
-        Desktop.getDesktop().browse(URI("http://localhost:9905/test/"));
+        Desktop.getDesktop().browse(URI("http://localhost:9905/test/"))
     }
 }
 

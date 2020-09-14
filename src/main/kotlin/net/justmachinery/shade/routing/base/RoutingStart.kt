@@ -1,8 +1,10 @@
 package net.justmachinery.shade.routing.base
 
 import kotlinx.html.Tag
-import net.justmachinery.shade.*
+import net.justmachinery.shade.EqLambda
+import net.justmachinery.shade.addContext
 import net.justmachinery.shade.component.AdvancedComponent
+import net.justmachinery.shade.currentContext
 import net.justmachinery.shade.state.ChangeBatchChangePolicy
 import net.justmachinery.shade.state.runChangeBatch
 import kotlin.reflect.KClass
@@ -43,7 +45,7 @@ private fun <RenderIn : Tag> RenderIn.doRouting(
         @Suppress("UNCHECKED_CAST")
         add(
             component = RoutingComponent::class as KClass<RoutingComponent<RenderIn>>,
-            props = RoutingComponent.Props(cb = cb, realCb = cb, parent = component)
+            props = RoutingComponent.Props(cb = EqLambda(cb), parent = component)
         )
     }
 }

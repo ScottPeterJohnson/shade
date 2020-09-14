@@ -1,6 +1,7 @@
 package net.justmachinery.shade.component
 
 import kotlinx.html.Tag
+import net.justmachinery.shade.EqLambda
 
 /**
  * Used if a function that accepts a callback introduces a new component, and the callback captures the wrong component
@@ -10,7 +11,7 @@ abstract class CallbackWrappingComponent<RenderIn : Tag, Props : CallbackWrappin
     fullProps: ComponentInitData<Props>
 ) : AdvancedComponent<Props, RenderIn>(fullProps) {
     interface BaseProps {
-        val realCb : Any //For debugging
+        val cb : EqLambda<*>
         val parent : AdvancedComponent<*, *>
     }
 
@@ -27,5 +28,5 @@ abstract class CallbackWrappingComponent<RenderIn : Tag, Props : CallbackWrappin
 
     abstract fun RenderIn.callCb()
 
-    override fun toString() = "${super.toString()}(${_props?.realCb?.javaClass})"
+    override fun toString() = "${super.toString()}(${_props?.cb?.raw})"
 }

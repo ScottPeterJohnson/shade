@@ -4,14 +4,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.html.*
 import net.justmachinery.shade.ComponentErrorHandlingContext
-import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.JavascriptException
+import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.handleErrors
-import net.justmachinery.shade.state.observable
+import net.justmachinery.shade.state.obs
 
 class ErrorTests : Component<Unit>() {
-    private var message by observable<String?>(null)
-    private var error by observable<ComponentErrorHandlingContext?>(
+    private var message by obs<String?>(null)
+    private var error by obs<ComponentErrorHandlingContext?>(
         null
     )
     override fun HtmlBlockTag.render() {

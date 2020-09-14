@@ -26,7 +26,7 @@ internal val componentPassProps = ThreadLocal<ComponentInitData<*>?>()
 
 internal fun AdvancedComponent<*,*>.doMount(){
     handlingErrors(ContextErrorSource.MOUNTING){
-        mounted()
+        MountingContext(this).mounted()
     }
 }
 internal fun AdvancedComponent<*,*>.doUnmount(){
@@ -37,6 +37,11 @@ internal fun AdvancedComponent<*,*>.doUnmount(){
     client.markDontRerender(this)
     renderDependencies.dispose()
     supervisorJob.cancel()
+
+    reactions?.forEach {
+        it.dispose()
+    }
+    reactions = null
 
     renderDependencies.component = null
 

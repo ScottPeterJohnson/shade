@@ -2,18 +2,15 @@ package net.justmachinery.shade.routing.base
 
 import kotlinx.html.HtmlTagMarker
 import kotlinx.html.Tag
+import net.justmachinery.shade.*
 import net.justmachinery.shade.component.AdvancedComponent
-import net.justmachinery.shade.state.ObservableValue
-import net.justmachinery.shade.RenderFunction
-import net.justmachinery.shade.addContext
 import net.justmachinery.shade.component.CallbackWrappingComponent
 import net.justmachinery.shade.component.ComponentInitData
-import net.justmachinery.shade.currentContext
-import net.justmachinery.shade.handleErrors
-import net.justmachinery.shade.state.observable
 import net.justmachinery.shade.routing.annotation.ParamsHolderSupport
 import net.justmachinery.shade.routing.annotation.RoutedPage
 import net.justmachinery.shade.routing.annotation.RoutedPath
+import net.justmachinery.shade.state.ObservableValue
+import net.justmachinery.shade.state.obs
 
 
 @HtmlTagMarker
@@ -92,16 +89,15 @@ class WithRouting<RenderIn : Tag>(
 
 internal class RoutingComponent<RenderIn : Tag>(fullProps : ComponentInitData<Props<RenderIn>>) : CallbackWrappingComponent<RenderIn, RoutingComponent.Props<RenderIn>>(fullProps) {
     data class Props<RenderIn : Tag>(
-        val cb : WithRouting<RenderIn>.()->Unit,
-        override val realCb : Any, //For debugging
+        override val cb : EqLambda<WithRouting<RenderIn>.() -> Unit>,
         override val parent : AdvancedComponent<*, *>
     ) : BaseProps
 
-    private var error by observable<Throwable?>(null)
+    private var error by obs<Throwable?>(null)
     private var lastPathUpdate = -1
 
     override fun RenderIn.callCb() {
-        val setupRouting = props.cb
+        val setupRouting = props.cb.raw
         val withRouting = WithRouting(
             this@RoutingComponent,
             this@callCb

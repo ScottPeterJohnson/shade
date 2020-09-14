@@ -3,9 +3,8 @@ package net.justmachinery.shade.components
 import kotlinx.html.HtmlBlockTag
 import kotlinx.html.div
 import kotlinx.html.h2
-import kotlinx.html.input
 import net.justmachinery.shade.component.Component
-import net.justmachinery.shade.state.react
+import net.justmachinery.shade.state.obs
 
 //This file shows sharing state between components, by passing it in via props
 
@@ -24,23 +23,19 @@ class SharedStateComponents  : Component<Unit>() {
 
 class SharedRootState {
     //The state can itself contain observable properties
-    var text by react("")
+    var text = obs("foobar")
 }
 
 class SharedStateRender : Component<SharedRootState>(){
     override fun HtmlBlockTag.render() {
-        +"You entered: ${props.text}"
+        +"You entered: ${props.text.value}"
     }
 }
 
 class SharedStateInput : Component<SharedRootState>(){
     override fun HtmlBlockTag.render() {
         div {
-            input {
-                onValueInput {
-                    props.text = it
-                }
-            }
+            boundInput(props.text){}
         }
     }
 }

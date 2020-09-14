@@ -6,11 +6,16 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.html.*
 import mu.KLogging
 import net.justmachinery.shade.*
-import net.justmachinery.shade.render.*
+import net.justmachinery.shade.render.ComponentRenderState
+import net.justmachinery.shade.render.RenderTreeRecorderConsumer
+import net.justmachinery.shade.render.addComponent
+import net.justmachinery.shade.render.toRenderTreeTagLocation
 import net.justmachinery.shade.routing.annotation.FinishedRoute
 import net.justmachinery.shade.routing.annotation.Router
 import net.justmachinery.shade.routing.annotation.routingSetNavigate
 import net.justmachinery.shade.routing.base.*
+import net.justmachinery.shade.state.ObservableValue
+import net.justmachinery.shade.state.Reaction
 import net.justmachinery.shade.state.Render
 import kotlin.coroutines.CoroutineContext
 import kotlin.reflect.KClass
@@ -22,7 +27,7 @@ import kotlin.reflect.KClass
 abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : ComponentInitData<PropType>) : CoroutineScope {
     companion object : KLogging()
 
-    var _props : PropType? = null
+    internal var _props : PropType? = null
     var props
         get() = _props ?: throw IllegalStateException("""
             Illegal props access, probably from a constructor or on init, e.g. "val foo = props.bar". This is not allowed 
@@ -49,7 +54,7 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
     abstract fun RenderIn.render()
 
     //Lifecycle functions.
-    open fun mounted(){}
+    open fun MountingContext.mounted(){}
     open fun unmounted(){}
 
 
@@ -153,26 +158,39 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
         add(
             FunctionComponent::class as KClass<FunctionComponent<RenderIn>>,
             FunctionComponent.Props(
-                cb = { cb() },
-                realCb = cb,
+                cb = EqLambda(cb),
                 parent = this@AdvancedComponent
             )
         )
     }
 
-    /**
-     * As [render] but not eliding the new component context
-     */
-    fun <RenderIn : Tag> RenderIn.renderWithNewComponent(cb : RenderIn.(FunctionComponent<RenderIn>)->Unit){
-        @Suppress("UNCHECKED_CAST")
-        add(
-            FunctionComponent::class as KClass<FunctionComponent<RenderIn>>,
-            FunctionComponent.Props(
-                cb = cb,
-                realCb = cb,
-                parent = this@AdvancedComponent
-            )
-        )
+    internal var reactions : MutableList<Reaction>? = null
+
+    fun HtmlBlockTag.boundInput(bound : ObservableValue<String>, cb: INPUT.()->Unit){
+        add(BoundInput.Props(bound, EqLambda(cb),EqLambda {it}, EqLambda {it}))
+    }
+    fun <T> HtmlBlockTag.boundInput(
+        bound: ObservableValue<T>,
+        toString: (T) -> String,
+        fromString: (String) -> T,
+        cb: INPUT.() -> Unit
+    ){
+        add(BoundInput.Props(
+            bound = bound,
+            cb = EqLambda(cb),
+            toString = EqLambda(toString),
+            fromString = EqLambda(fromString)
+        ))
+    }
+    fun HtmlBlockTag.intInput(bound : ObservableValue<Int>, cb: INPUT.()->Unit){
+        boundInput(
+            bound = bound,
+            fromString = { it.toIntOrNull() ?: 0 },
+            toString = { it.toString() }
+        ){
+            type = InputType.number
+            cb()
+        }
     }
 
     //Event CB helpers
@@ -217,7 +235,7 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
             eventName = "onChange",
             prefix = prefix,
             suffix = suffix,
-            data = "event.srcElement.value",
+            data = "it.value",
             cb = { cb(Gson().fromJson(it!!.raw, String::class.java)) }
         )
     }
@@ -231,7 +249,7 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
             eventName = "onInput",
             prefix = prefix,
             suffix = suffix,
-            data = "event.srcElement.value",
+            data = "it.value",
             cb = { cb(Gson().fromJson(it!!.raw, String::class.java)) }
         )
     }
@@ -301,4 +319,19 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
     fun CommonAttributeGroupFacade.onVolumeChange(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onVolumeChange = callbackString(eventName = "onVolumeChange", prefix = prefix, suffix = suffix, data = data, cb = cb) }
     fun CommonAttributeGroupFacade.onWaiting(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onWaiting = callbackString(eventName = "onWaiting", prefix = prefix, suffix = suffix, data = data, cb = cb) }
     fun CommonAttributeGroupFacade.onWheel(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onWheel = callbackString(eventName = "onWheel", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+}
+
+class MountingContext(private val component: AdvancedComponent<*,*>) {
+    /**
+     * Setup a reaction attached to this component, which will run once immediately
+     * and whenever its dependencies change thereafter until this component is unmounted.
+     * (This only makes sense to do on mount, hence the scoped context)
+     */
+    fun react(cb: ()->Unit){
+        val reactions = component.reactions ?: run {
+            component.reactions = mutableListOf()
+            component.reactions!!
+        }
+        reactions.add(Reaction(cb))
+    }
 }

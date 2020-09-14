@@ -8,6 +8,7 @@ import net.justmachinery.shade.component.AdvancedComponent
 import net.justmachinery.shade.component.doMount
 import net.justmachinery.shade.render.renderInternal
 import net.justmachinery.shade.render.updateRender
+import net.justmachinery.shade.state.batchChangesUntilSuspend
 import org.intellij.lang.annotations.Language
 import java.util.*
 import java.util.concurrent.atomic.AtomicInteger
@@ -127,7 +128,7 @@ class Client(
     private val eventQueue : Queue<Pair<CallbackData, Json?>> = ArrayDeque()
 
     internal val supervisor = SupervisorJob()
-    internal val coroutineScope = CoroutineScope(root.context + supervisor)
+    internal val coroutineScope = CoroutineScope(root.context + supervisor + batchChangesUntilSuspend)
 
     internal fun cleanup(){
         //Most cleanup will be handled by the garbage collector.
@@ -329,7 +330,7 @@ class Client(
         val wrappedPrefix = if(prefix.isNotBlank()) "$prefix;" else ""
         val wrappedSuffix = if(suffix.isNotBlank()) ";$suffix" else ""
         val wrappedData = if(data != null) ",JSON.stringify($data)" else ""
-        return id to "javascript:(function(){ ${wrappedPrefix}window.shade($id$wrappedData)$wrappedSuffix })()"
+        return id to "javascript:(function(){ let it=event.srcElement;${wrappedPrefix}window.shade($id$wrappedData)$wrappedSuffix })()"
     }
 
     fun executeScript(@Language("JavaScript 1.8") js : String) {

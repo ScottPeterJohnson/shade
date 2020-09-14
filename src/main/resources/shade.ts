@@ -191,6 +191,7 @@
         return finalChildren;
     }
 
+    //Reconcile a targetId with HTML
     function r(targetId : number, html : string){
         const target = document.getElementById("shade"+targetId);
         if(!target){ return }
@@ -207,6 +208,14 @@
 
         patchChildren(target.parentElement!!, target, included, htmlDom.childNodes);
         runElementScripts(target.parentElement!!);
+    }
+    //Update a bound input with value
+    function b(boundId : number, serverSeen : number, value : string){
+        let input = document.querySelector("[shade-bound=\"" + boundId + "\"]") as HTMLInputElement
+        let seen = (input as any).boundSeen || ((input as any).boundSeen=0)
+        if(input && seen <= serverSeen){
+            input.value=value;
+        }
     }
 
     function runElementScripts(base : HTMLElement){

@@ -4,14 +4,14 @@ import kotlinx.html.HtmlBlockTag
 import kotlinx.html.button
 import kotlinx.html.div
 import kotlinx.html.h2
-import net.justmachinery.shade.*
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.component.PropsType
+import net.justmachinery.shade.newBackgroundColorOnRerender
 import net.justmachinery.shade.state.ObservableValue
-import net.justmachinery.shade.state.observable
+import net.justmachinery.shade.state.obs
 
 class Counter : Component<Unit>() {
-    var counter = observable(0)
+    var counter = obs(0)
     override fun HtmlBlockTag.render() {
         h2 { +"A simple counter" }
         div {

@@ -5,10 +5,10 @@ import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.generated.routing.SubDirectoryRouter
 import net.justmachinery.shade.generated.routing.TestRoutingSpecRouter
 import net.justmachinery.shade.generated.routing.build
-import net.justmachinery.shade.routing.annotation.processor.GenerateRouting
 import net.justmachinery.shade.routing.annotation.QueryParamSpec
 import net.justmachinery.shade.routing.annotation.RoutingSpec
 import net.justmachinery.shade.routing.annotation.RoutingSpecBase
+import net.justmachinery.shade.routing.annotation.processor.GenerateRouting
 import net.justmachinery.shade.routing.base.InternalUrlInfo
 
 class RoutingTest : Component<Unit>(){
@@ -88,7 +88,7 @@ class RoutingDemoPage : Component<Unit>() {
             TestRoutingSpec.build().user(id = 49)
         ).forEach { route ->
             div {
-                a(){
+                a {
                     navigate = route
                     +route.asExternalUrl()
                 }

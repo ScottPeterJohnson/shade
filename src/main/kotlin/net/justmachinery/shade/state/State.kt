@@ -1,6 +1,6 @@
 package net.justmachinery.shade.state
 
-fun <T> react(value: T) = ObservableValue(value)
+fun <T> obs(value: T) = ObservableValue(value)
 fun <T> observable(value: T) = ObservableValue(value)
 fun <T> computed(lazy : Boolean = true, block: () -> T) =
     ComputedValue(block, lazy)

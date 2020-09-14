@@ -16,10 +16,10 @@ user actions and server-side responses
 This example shows a simple TODO list component:
 ```kotlin
 class TodoList : Component<TodoList.Props>() {
-    data class Props(val userName : String) : PropsType<Props, TodoList>
+    data class Props(val userName : String) : PropsType<Props, TodoList>()
 
     var todoList by observable(listOf<String>())
-    var newItem by observable("")
+    var newItem = observable("")
     override fun HtmlBlockTag.render(){
         p {
             +"Hello, "
@@ -38,14 +38,12 @@ class TodoList : Component<TodoList.Props>() {
             }
         }
         +"Add a new item:"
-        input(type = InputType.text){
-            onValueChange {
-                newItem = it
-            }
+        boundInput(newItem){
+            type = InputType.text
         }
         button {
             onClick {
-                todoList = todoList + newItem
+                todoList = todoList + newItem.value
             }
         }
     }

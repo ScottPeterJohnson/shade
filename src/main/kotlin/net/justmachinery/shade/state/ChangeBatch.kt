@@ -1,10 +1,13 @@
 package net.justmachinery.shade.state
 
 import com.google.common.collect.Sets
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.ThreadContextElement
+import java.io.Closeable
 import java.util.*
+import kotlin.coroutines.CoroutineContext
 
 internal val changeBatch = ThreadLocal<ChangeBatch>()
-
 
 internal class ChangeBatch(
     var changePolicy: ChangeBatchChangePolicy,
@@ -16,82 +19,98 @@ internal enum class ChangeBatchChangePolicy {
     ALLOWED,
     FORCE_ALLOWED
 }
+
 internal fun <T> runChangeBatch(
     changePolicy: ChangeBatchChangePolicy,
     block: () -> T
 ): T {
+    startChangeBatch(changePolicy).use {
+        return block()
+    }
+}
+
+internal fun startChangeBatch(changePolicy: ChangeBatchChangePolicy) : StartChangeBatchResult {
     val existing = changeBatch.get()
-    if(existing != null){
+    return if(existing != null){
         val existingChangePolicy = existing.changePolicy
         if(changePolicy == ChangeBatchChangePolicy.ALLOWED && existingChangePolicy == ChangeBatchChangePolicy.DISALLOWED){
             throw IllegalStateException("Can't make changes inside a render block!")
         }
         existing.changePolicy = changePolicy
-        try {
-            return block()
-        } finally {
-            existing.changePolicy = existingChangePolicy
+        StartChangeBatchResult.Existing(existing, existingChangePolicy)
+    } else {
+        val newBatch = ChangeBatch(
+            changePolicy = changePolicy,
+            changes = Sets.newIdentityHashSet()
+        )
+        changeBatch.set(newBatch)
+        StartChangeBatchResult.New(newBatch)
+    }
+}
+
+internal sealed class StartChangeBatchResult : Closeable {
+    data class Existing(private val batch: ChangeBatch, private val oldPolicy: ChangeBatchChangePolicy) : StartChangeBatchResult() {
+        override fun close() {
+            batch.changePolicy = oldPolicy
         }
     }
 
-    val newBatch =
-        Sets.newIdentityHashSet<Atom>()
-    changeBatch.set(
-        ChangeBatch(changePolicy = changePolicy, changes = newBatch)
-    )
-    try {
-        val returnValue = block()
-        if (newBatch.isNotEmpty()) {
-            val renders =
-                Sets.newIdentityHashSet<Render>()
+    data class New(val batch: ChangeBatch) : StartChangeBatchResult() {
+        override fun close() {
+            try {
+                val changes = batch.changes
+                if (changes.isNotEmpty()) {
+                    val renders =
+                        Sets.newIdentityHashSet<Render>()
 
-            while(newBatch.isNotEmpty()){
-                //1. Find all potentially dirtied nodes
-                val dirtied =
-                    findAllPotentiallyDirtyNodes(newBatch.asSequence())
-                newBatch.clear()
+                    while(changes.isNotEmpty()){
+                        //1. Find all potentially dirtied nodes
+                        val dirtied =
+                            findAllPotentiallyDirtyNodes(changes.asSequence())
+                        changes.clear()
 
-                //2. Topologically sort them
-                val sorted = topologicalSort(dirtied)
+                        //2. Topologically sort them
+                        val sorted = topologicalSort(dirtied)
 
-                //3. Re-evaluate them in that order, checking that their dependencies Actually Changed
-                //First, all computed values recompute
-                sorted.observers.asSequence().filterIsInstance(ComputedValue::class.java).forEach {
-                    val changed = if(sorted.staleDependencyCount[it]!! > 0){
-                        it.computeAndCheckChange()
-                    } else {
-                        false
+                        //3. Re-evaluate them in that order, checking that their dependencies Actually Changed
+                        //First, all computed values recompute
+                        sorted.observers.asSequence().filterIsInstance(ComputedValue::class.java).forEach {
+                            val changed = if(sorted.staleDependencyCount[it]!! > 0){
+                                it.computeAndCheckChange()
+                            } else {
+                                false
+                            }
+                            if(!changed){
+                                it.observers.forEach { subObs ->
+                                    sorted.staleDependencyCount.compute(subObs) { _, value -> value!! - 1 }
+                                }
+                            }
+                        }
+                        //Next, all actions trigger
+                        sorted.observers.asSequence().filterIsInstance(Reaction::class.java).forEach {
+                            if(sorted.staleDependencyCount[it]!! > 0){
+                                it.run()
+                            }
+                        }
+                        //Defer all renders until the end
+                        renders.addAll(sorted.observers.filterIsInstance(Render::class.java).filter { sorted.staleDependencyCount[it]!! > 0 })
+                        //Loop in case actions triggered more changes
                     }
-                    if(!changed){
-                        it.observers.forEach { subObs ->
-                            sorted.staleDependencyCount.compute(subObs) { _, value -> value!! - 1 }
+                    //Now we can process renders
+                    if(renders.isNotEmpty()){
+                        renders.asSequence().mapNotNull {
+                            val component = it.component
+                            if(component == null){ it.dispose() }
+                            component
+                        }.groupBy { it.client }.forEach { (client, components) ->
+                            client.setComponentsDirty(components)
                         }
                     }
                 }
-                //Next, all actions trigger
-                sorted.observers.asSequence().filterIsInstance(Reaction::class.java).forEach {
-                    if(sorted.staleDependencyCount[it]!! > 0){
-                        it.run()
-                    }
-                }
-                //Defer all renders until the end
-                renders.addAll(sorted.observers.filterIsInstance(Render::class.java).filter { sorted.staleDependencyCount[it]!! > 0 })
-                //Loop in case actions triggered more changes
-            }
-            //Now we can process renders
-            if(renders.isNotEmpty()){
-                renders.asSequence().mapNotNull {
-                    val component = it.component
-                    if(component == null){ it.dispose() }
-                    component
-                }.groupBy { it.client }.forEach { (client, components) ->
-                    client.setComponentsDirty(components)
-                }
+            } finally {
+                changeBatch.remove()
             }
         }
-        return returnValue
-    } finally {
-        changeBatch.remove()
     }
 }
 
@@ -155,4 +174,21 @@ private fun topologicalSort(dirty : MutableMap<ReactiveObserver, DirtyNodeData>)
         observers = sorted.asReversed(),
         staleDependencyCount = staleDependencyCount
     )
+}
+
+
+val batchChangesUntilSuspend : ThreadContextElement<*> = BatchChangesUntilSuspend()
+internal class BatchChangesUntilSuspend : ThreadContextElement<StartChangeBatchResult> {
+    companion object Key : CoroutineContext.Key<CoroutineName>
+
+    override val key: CoroutineContext.Key<*>
+        get() = Key
+
+    override fun restoreThreadContext(context: CoroutineContext, oldState: StartChangeBatchResult) {
+        oldState.close()
+    }
+
+    override fun updateThreadContext(context: CoroutineContext) : StartChangeBatchResult {
+        return startChangeBatch(ChangeBatchChangePolicy.FORCE_ALLOWED)
+    }
 }

@@ -2,10 +2,14 @@ package net.justmachinery.shade.components
 
 import kotlinx.coroutines.launch
 import kotlinx.html.*
-import net.justmachinery.shade.*
+import net.justmachinery.shade.ApplyJsTest
+import net.justmachinery.shade.ComputedState
+import net.justmachinery.shade.KeyRerenderTest
 import net.justmachinery.shade.component.Component
+import net.justmachinery.shade.component.MountingContext
+import net.justmachinery.shade.newBackgroundColorOnRerender
 import net.justmachinery.shade.routing.base.UrlInfo
-import net.justmachinery.shade.state.observable
+import net.justmachinery.shade.state.obs
 import java.time.Duration
 import java.time.temporal.ChronoUnit
 
@@ -69,6 +73,10 @@ class RootPageComponent : Component<Unit>(){
 
             add(RoutingTest::class)
 
+            add(BoundInputTest::class)
+
+            add(ReactTest::class)
+
             h2 { +"Demo settings" }
 
             button {
@@ -80,10 +88,9 @@ class RootPageComponent : Component<Unit>(){
                 //those inputs happened on the same place in this component's render tree.
                 //Otherwise, old inputs will be lost if a rerender removes the element they were applicable to.
                 +"Simulate extra delay (ms): "
-                input(type = InputType.number){
+                intInput(simulateExtraDelay){
                     min = "0"
                     max = "10000"
-                    value = "0"
                     onValueChange {
                         val delay = it.toLong()
                         //Halve the delay (it's a round trip)
@@ -93,10 +100,10 @@ class RootPageComponent : Component<Unit>(){
             }
         }
     }
+    var simulateExtraDelay = obs(0)
+    var rootRerenders by obs(0)
 
-    var rootRerenders by observable(0)
-
-    override fun mounted() {
+    override fun MountingContext.mounted() {
         //The mounted() lifecycle function allows you to e.g. run JS expressions when the component is mounted
         launch {
             val result = client.runPromise("new Promise(function(resolve, reject){ setTimeout(function(){ resolve('foo') }, 3000)})").await()

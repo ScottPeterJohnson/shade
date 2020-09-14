@@ -176,6 +176,7 @@
         }
         return finalChildren;
     }
+    //Reconcile a targetId with HTML
     function r(targetId, html) {
         const target = document.getElementById("shade" + targetId);
         if (!target) {
@@ -191,6 +192,14 @@
         }
         patchChildren(target.parentElement, target, included, htmlDom.childNodes);
         runElementScripts(target.parentElement);
+    }
+    //Update a bound input with value
+    function b(boundId, serverSeen, value) {
+        let input = document.querySelector("[shade-bound=\"" + boundId + "\"]");
+        let seen = input.boundSeen || (input.boundSeen = 0);
+        if (input && seen <= serverSeen) {
+            input.value = value;
+        }
     }
     function runElementScripts(base) {
         base.querySelectorAll("[data-shade-element-js]").forEach((value) => {

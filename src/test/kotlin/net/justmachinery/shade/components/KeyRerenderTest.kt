@@ -4,7 +4,7 @@ import kotlinx.css.Display
 import kotlinx.css.display
 import kotlinx.html.*
 import net.justmachinery.shade.component.Component
-import net.justmachinery.shade.state.observable
+import net.justmachinery.shade.state.obs
 
 /**
  * This example tests efficient rerendering of components by key.
@@ -12,7 +12,7 @@ import net.justmachinery.shade.state.observable
  * which might retain an identity but change their number or positioning.
  */
 class KeyRerenderTest : Component<Unit>() {
-    var numbersList by observable((0 until 10).toList())
+    var numbersList by obs((0 until 10).toList())
     override fun HtmlBlockTag.render() {
         h2 { +"Rerendering" }
         style {

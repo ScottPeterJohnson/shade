@@ -3,16 +3,21 @@ package net.justmachinery.shade.components
 import kotlinx.css.FontWeight
 import kotlinx.css.fontWeight
 import kotlinx.html.*
-import net.justmachinery.shade.*
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.component.PropsType
+import net.justmachinery.shade.key
+import net.justmachinery.shade.newBackgroundColorOnRerender
+import net.justmachinery.shade.state.obs
 import net.justmachinery.shade.state.observable
+import net.justmachinery.shade.withStyle
 
 class TodoListSection : Component<Unit>() {
     //This is the syntax for an observable piece of per-component state.
     //When it's reassigned, this component is marked as dirty and will be redrawn.
     var todo by observable(emptyList<String>())
-    var newTaskName : String = ""
+    //You can also use the non-delegated version if you need direct access to the observable.
+    //"obs" is an alias for observable and may be easier to import without conflict
+    val newTaskName = obs("")
 
     override fun HtmlBlockTag.render() {
         div {
@@ -28,16 +33,30 @@ class TodoListSection : Component<Unit>() {
                 }
             }
 
-            input {
+            //Here we directly bind the input's value to serverside state.
+            //The boundInput helper does a few useful things for us
+            boundInput(newTaskName) {
                 type = InputType.text
-                //Here we directly one-way bind the input's value to serverside state.
-                onValueChange {
-                    newTaskName = it
-                }
             }
+
+            @Suppress("ConstantConditionIf")
+            if(false){
+                //Thematically, the boundInput is equivalent to this:
+                input {
+                    value = newTaskName.value
+                    onValueChange {
+                        newTaskName.set(it)
+                    }
+                    type = InputType.text
+                }
+                //However, this won't actually change what the textbox says if the observable is set to something the
+                //user didn't input! This is because in HTML, the value is only set when the input is created.
+                //boundInput takes care of this and should be generally preferred.
+            }
+
             button {
                 onClick {
-                    todo = todo + newTaskName
+                    todo = todo + newTaskName.value
                 }
                 +"New!"
             }
@@ -61,7 +80,7 @@ class TodoList : Component<TodoList.Props>() {
     data class Props(val userName : String) : PropsType<Props, TodoList>()
 
     var todoList by observable(listOf<String>())
-    var newItem by observable("")
+    var newItem = observable("")
     override fun HtmlBlockTag.render(){
         p {
             +"Hello, "
@@ -80,14 +99,12 @@ class TodoList : Component<TodoList.Props>() {
             }
         }
         +"Add a new item:"
-        input(type = InputType.text){
-            onValueChange {
-                newItem = it
-            }
+        boundInput(newItem){
+            type = InputType.text
         }
         button {
             onClick {
-                todoList = todoList + newItem
+                todoList = todoList + newItem.value
             }
         }
     }
