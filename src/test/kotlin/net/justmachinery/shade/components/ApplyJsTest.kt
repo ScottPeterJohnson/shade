@@ -4,6 +4,7 @@ import kotlinx.html.HtmlBlockTag
 import kotlinx.html.div
 import kotlinx.html.h2
 import net.justmachinery.shade.component.Component
+import net.justmachinery.shade.utility.applyJs
 
 /**
  * Using applyJs() we can specify JS to be executed when a DOM element is rendered.

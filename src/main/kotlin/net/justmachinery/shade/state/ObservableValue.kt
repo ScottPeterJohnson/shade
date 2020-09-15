@@ -2,7 +2,7 @@ package net.justmachinery.shade.state
 
 import kotlin.reflect.KProperty
 
-
+typealias Obs<T> = ObservableValue<T>
 class ObservableValue<T>(
     internal var _value: T
 ) {

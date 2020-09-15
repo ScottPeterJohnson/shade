@@ -4,6 +4,9 @@ import java.lang.reflect.ParameterizedType
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.KClass
 
+/**
+ * Implementing PropsType allows for more elegant add() calls
+ */
 abstract class PropsType<P : PropsType<P, T>, T : AdvancedComponent<P, *>> {
     @Suppress("UNCHECKED_CAST")
     val type : KClass<T>

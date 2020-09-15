@@ -217,6 +217,15 @@
             input.value=value;
         }
     }
+    //Update a bound checkbox
+    function c(boundId : number, serverSeen : number, value : number){
+        let checked = value === 1
+        let input = document.querySelector("[shade-checkbox=\"" + boundId + "\"]") as HTMLInputElement
+        let seen = (input as any).boundSeen || ((input as any).boundSeen=0)
+        if(input && seen <= serverSeen){
+            input.checked = checked;
+        }
+    }
 
     function runElementScripts(base : HTMLElement){
         base.querySelectorAll("[data-shade-element-js]").forEach((value)=>{

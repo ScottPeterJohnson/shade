@@ -1,4 +1,4 @@
-package net.justmachinery.shade
+package net.justmachinery.shade.utility
 
 import kotlinx.coroutines.Job
 import kotlinx.css.CSSBuilder

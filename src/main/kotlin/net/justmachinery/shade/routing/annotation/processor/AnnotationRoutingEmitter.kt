@@ -2,11 +2,11 @@ package net.justmachinery.shade.routing.annotation.processor
 
 import com.squareup.kotlinpoet.*
 import kotlinx.html.Tag
-import net.justmachinery.shade.ErrorOr
 import net.justmachinery.shade.component.AdvancedComponent
 import net.justmachinery.shade.routing.annotation.*
 import net.justmachinery.shade.routing.base.WithRouting
 import net.justmachinery.shade.state.ObservableValue
+import net.justmachinery.shade.utility.ErrorOr
 import java.io.File
 import kotlin.reflect.KClass
 

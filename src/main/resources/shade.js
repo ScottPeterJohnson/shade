@@ -201,6 +201,15 @@
             input.value = value;
         }
     }
+    //Update a bound checkbox
+    function c(boundId, serverSeen, value) {
+        let checked = value === 1;
+        let input = document.querySelector("[shade-checkbox=\"" + boundId + "\"]");
+        let seen = input.boundSeen || (input.boundSeen = 0);
+        if (input && seen <= serverSeen) {
+            input.checked = checked;
+        }
+    }
     function runElementScripts(base) {
         base.querySelectorAll("[data-shade-element-js]").forEach((value) => {
             const oldJsInfo = value.shadeElementJs;

@@ -11,6 +11,7 @@ import kotlinx.html.script
 import kotlinx.html.unsafe
 import mu.KLogging
 import net.justmachinery.shade.component.*
+import net.justmachinery.shade.utility.*
 import java.time.Duration
 import java.util.*
 import kotlin.coroutines.CoroutineContext
@@ -87,7 +88,7 @@ class ShadeRoot(
      */
     fun render(tag : HtmlBlockTag, cb : (ShadeRootComponent.()->Unit)){
         installFramework(tag){client ->
-            renderComponentAsRoot(client, tag, ShadeRootComponent::class, EqLambda(cb))
+            renderComponentAsRoot(client, tag, ShadeRootComponent::class, cb.eql)
         }
     }
 
@@ -95,7 +96,7 @@ class ShadeRoot(
      * As render, but does not create a new client (and can be used multiple times on a page)
      */
     fun renderWithClient(client: Client, tag : HtmlBlockTag, cb : (ShadeRootComponent.()->Unit)){
-        renderComponentAsRoot(client, tag, ShadeRootComponent::class, EqLambda(cb))
+        renderComponentAsRoot(client, tag, ShadeRootComponent::class, cb.eql)
     }
 
 
@@ -249,7 +250,7 @@ class ShadeRoot(
     }
 }
 
-class ShadeRootComponent : Component<EqLambda<ShadeRootComponent.()->Unit>>() {
+class ShadeRootComponent : Component<EqLambda<ShadeRootComponent.() -> Unit>>() {
     override fun HtmlBlockTag.render() {
         props.raw(this@ShadeRootComponent)
     }

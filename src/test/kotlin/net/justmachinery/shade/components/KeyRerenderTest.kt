@@ -5,6 +5,8 @@ import kotlinx.css.display
 import kotlinx.html.*
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.state.obs
+import net.justmachinery.shade.utility.key
+import net.justmachinery.shade.utility.withStyle
 
 /**
  * This example tests efficient rerendering of components by key.

@@ -5,6 +5,7 @@ import ch.qos.logback.classic.LoggerContext
 import kotlinx.css.Color
 import kotlinx.css.backgroundColor
 import kotlinx.html.DIV
+import net.justmachinery.shade.utility.withStyle
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.util.*

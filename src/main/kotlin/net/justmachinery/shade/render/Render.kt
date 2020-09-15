@@ -96,7 +96,6 @@ internal fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.updateRender(clazz 
 }
 
 
-
 fun <T : Any, RenderIn : Tag> addComponent(
     parent : AdvancedComponent<*, *>,
     block : RenderIn,

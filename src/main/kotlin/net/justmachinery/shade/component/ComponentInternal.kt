@@ -51,6 +51,11 @@ internal fun AdvancedComponent<*,*>.doUnmount(){
     }
 }
 
-//This allows for the render() function to work despite there being no ergonomic way to have both a fresh RenderIn tag and
-//a fresh component receiver for the passed-in function.
-internal fun <R : Any, P : Tag> AdvancedComponent<R,P>.realComponentThis() = this.renderState.currentComponentOverride ?: this
+/**
+ * Essentially this is a code splitting scheme, allowing us to define basic functions of two receivers on a
+ * component in multiple files.
+ */
+interface ComponentBase {
+    fun thisComponent() : AdvancedComponent<*,*>
+    fun realComponentThis() : AdvancedComponent<*,*>
+}

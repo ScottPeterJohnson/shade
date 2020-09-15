@@ -5,11 +5,11 @@ import kotlinx.css.fontWeight
 import kotlinx.html.*
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.component.PropsType
-import net.justmachinery.shade.key
 import net.justmachinery.shade.newBackgroundColorOnRerender
 import net.justmachinery.shade.state.obs
 import net.justmachinery.shade.state.observable
-import net.justmachinery.shade.withStyle
+import net.justmachinery.shade.utility.key
+import net.justmachinery.shade.utility.withStyle
 
 class TodoListSection : Component<Unit>() {
     //This is the syntax for an observable piece of per-component state.

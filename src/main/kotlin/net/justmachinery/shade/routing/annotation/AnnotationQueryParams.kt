@@ -1,7 +1,7 @@
 package net.justmachinery.shade.routing.annotation
 
-import net.justmachinery.shade.ErrorOr
 import net.justmachinery.shade.routing.base.RoutingException
+import net.justmachinery.shade.utility.ErrorOr
 
 interface QueryParamSpec {
     fun param(name : String) = StringParam(name)

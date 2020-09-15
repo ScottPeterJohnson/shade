@@ -1,7 +1,7 @@
 package net.justmachinery.shade.component
 
 import kotlinx.html.Tag
-import net.justmachinery.shade.EqLambda
+import net.justmachinery.shade.utility.EqLambda
 
 /**
  * Used if a function that accepts a callback introduces a new component, and the callback captures the wrong component

@@ -1,8 +1,8 @@
 package net.justmachinery.shade.routing.base
 
-import net.justmachinery.shade.mergeMut
 import net.justmachinery.shade.state.ObservableValue
 import net.justmachinery.shade.state.obs
+import net.justmachinery.shade.utility.mergeMut
 import org.apache.http.client.utils.URLEncodedUtils
 import org.apache.http.message.BasicNameValuePair
 import java.nio.charset.Charset
