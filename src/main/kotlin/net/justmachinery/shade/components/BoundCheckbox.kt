@@ -8,8 +8,8 @@ import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.component.MountingContext
 import net.justmachinery.shade.component.PropsType
 import net.justmachinery.shade.state.Atom
-import net.justmachinery.shade.state.Obs
 import net.justmachinery.shade.utility.EqLambda
+import net.justmachinery.shade.utility.GetSet
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -20,7 +20,7 @@ class BoundCheckbox : Component<BoundCheckbox.Props>(){
         private val checkboxId = AtomicInteger(0)
     }
     data class Props(
-        val bound: Obs<Boolean>,
+        val bound: GetSet<Boolean>,
         val cb: EqLambda<INPUT.() -> Unit>
     ) : PropsType<Props, BoundCheckbox>()
 
@@ -31,7 +31,7 @@ class BoundCheckbox : Component<BoundCheckbox.Props>(){
     override fun MountingContext.mounted() {
         react {
             checkChange.reportObserved()
-            val value = props.bound.value
+            val value = props.bound.get()
             if(value != lastKnownInput){
                 client.executeScript("c($bindingId,$serverSeen,${if(value) "1" else "0"})")
             }

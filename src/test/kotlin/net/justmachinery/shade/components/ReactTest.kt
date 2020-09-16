@@ -6,10 +6,10 @@ import net.justmachinery.shade.component.MountingContext
 import net.justmachinery.shade.state.obs
 
 class ReactTest : Component<Unit>() {
-    var counter = obs(0)
+    var counter by obs(0)
     override fun MountingContext.mounted() {
         react {
-            println("The counter is ${counter.value} in react test $this")
+            println("The counter is $counter in react test $this")
         }
     }
     override fun HtmlBlockTag.render() {
@@ -18,7 +18,7 @@ class ReactTest : Component<Unit>() {
         div {
             button {
                 onClick {
-                    counter.value += 1
+                    counter += 1
                 }
                 +"Add to counter"
             }

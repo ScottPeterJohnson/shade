@@ -6,11 +6,12 @@ import kotlinx.html.h2
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.state.computed
 import net.justmachinery.shade.state.obs
+import net.justmachinery.shade.utility.getSet
 
 class ComputedState : Component<Unit>() {
-    var firstNumber = obs(5)
-    var secondNumber = obs(10)
-    val sum by computed { firstNumber.value + secondNumber.value }
+    var firstNumber by obs(5)
+    var secondNumber by obs(10)
+    val sum by computed { firstNumber + secondNumber }
     val sumMod10 by computed { sum % 10 }
     val sumMod10Plus3 by computed { sumMod10 + 3 }
     override fun HtmlBlockTag.render() {
@@ -20,7 +21,7 @@ class ComputedState : Component<Unit>() {
                 div {
                     newBackgroundColorOnRerender()
                     //intInput is a boundInput helper
-                    intInput(firstNumber){}
+                    intInput(::firstNumber.getSet){}
 
                 }
             }
@@ -28,7 +29,7 @@ class ComputedState : Component<Unit>() {
             render {
                 div {
                     newBackgroundColorOnRerender()
-                    intInput(secondNumber){}
+                    intInput(::secondNumber.getSet){}
                 }
             }
             render {

@@ -5,8 +5,8 @@ import kotlinx.html.*
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.component.MountingContext
 import net.justmachinery.shade.state.Atom
-import net.justmachinery.shade.state.Obs
 import net.justmachinery.shade.utility.EqLambda
+import net.justmachinery.shade.utility.GetSet
 import java.util.concurrent.atomic.AtomicInteger
 
 class BoundInput<T> : BoundTag<T, INPUT>() {
@@ -32,7 +32,7 @@ abstract class BoundTag<T, Tag : CommonAttributeGroupFacade> : Component<BoundTa
         private val boundId = AtomicInteger(0)
     }
     data class Props<T, Tag>(
-        val bound: Obs<T>,
+        val bound: GetSet<T>,
         val cb: EqLambda<Tag.() -> Unit>,
         val toString : EqLambda<(T) -> String>,
         val fromString : EqLambda<(String) -> T>
@@ -45,7 +45,7 @@ abstract class BoundTag<T, Tag : CommonAttributeGroupFacade> : Component<BoundTa
     override fun MountingContext.mounted() {
         react {
             checkChange.reportObserved()
-            val value = props.toString.raw(props.bound.value)
+            val value = props.toString.raw(props.bound.get())
             if(value != lastKnownInput){
                 client.executeScript("b($bindingId,$serverSeen,${Gson().toJson(value)})")
             }

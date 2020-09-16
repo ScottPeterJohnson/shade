@@ -6,41 +6,43 @@ import kotlinx.html.h2
 import kotlinx.html.p
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.state.obs
+import net.justmachinery.shade.utility.EqLambda
+import net.justmachinery.shade.utility.getSet
 
 class BoundInputTest : Component<Unit>() {
-    var novel = obs("")
-    var checkbox = obs(false)
+    var novel by obs("")
+    var checkbox by obs(false)
     enum class Selected {
         FIRST,
         SECOND,
         THIRD
     }
-    val selected = obs(Selected.FIRST)
+    var selected by obs(Selected.FIRST)
     override fun HtmlBlockTag.render() {
         h2 { +"Bound input test" }
         button {
             onClick {
-                novel.value = ""
-                checkbox.value = false
-                selected.value = Selected.FIRST
+                novel = ""
+                checkbox = false
+                selected = Selected.FIRST
             }
             +"Reset this section"
         }
         p { +"A text input that does not allow the letter 'e'" }
         boundInput(
-            novel,
+            ::novel.getSet,
             toString = { it },
             fromString = { it.filter { it != 'e' } }
         ){}
-        p { +"This checkbox is ${if(checkbox.value) "checked" else "not checked"}" }
-        boundCheckbox(checkbox){
+        p { +"This checkbox is ${if(checkbox) "checked" else "not checked"}" }
+        boundCheckbox(::checkbox.getSet){
             +"Checked"
         }
-        p { +"${selected.value} is selected" }
+        p { +"$selected is selected" }
         add(Select.Props(
-            selected = selected,
+            selected = ::selected.getSet,
             options = Selected.values().toList(),
-            render = { it.name }
+            render = EqLambda { it.name }
         ))
     }
 }

@@ -1,19 +1,20 @@
 package net.justmachinery.shade.state
 
+import net.justmachinery.shade.utility.GetSet
 import kotlin.reflect.KProperty
 
 typealias Obs<T> = ObservableValue<T>
 class ObservableValue<T>(
     internal var _value: T
-) {
+) : GetSet<T> {
     private val atom = Atom()
 
-    fun get(): T {
+    override fun get(): T {
         atom.reportObserved()
         return _value
     }
 
-    fun set(value: T) {
+    override fun set(value: T) {
         if (value != this._value) {
             this._value = value
             atom.reportChanged()

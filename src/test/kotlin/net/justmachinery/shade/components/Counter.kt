@@ -7,17 +7,18 @@ import kotlinx.html.h2
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.component.PropsType
 import net.justmachinery.shade.newBackgroundColorOnRerender
-import net.justmachinery.shade.state.ObservableValue
 import net.justmachinery.shade.state.obs
+import net.justmachinery.shade.utility.Get
+import net.justmachinery.shade.utility.getSet
 
 class Counter : Component<Unit>() {
-    var counter = obs(0)
+    var counter by obs(0)
     override fun HtmlBlockTag.render() {
         h2 { +"A simple counter" }
         div {
             button {
                 onClick {
-                    counter.value += 1
+                    counter += 1
                 }
                 +"Add to counter"
             }
@@ -26,17 +27,17 @@ class Counter : Component<Unit>() {
             +"This subcomponent takes the counter as a prop, and outputs it: "
             //This is an example of passing a prop that changes.
             //It's also an example of using the related props class to specify the component.
-            add(SubComponentShowingCounter.Props(counter = counter))
+            add(SubComponentShowingCounter.Props(counter = ::counter.getSet))
         }
     }
 }
 
 private class SubComponentShowingCounter : Component<SubComponentShowingCounter.Props>() {
-    data class Props (val counter : ObservableValue<Int>) : PropsType<Props, SubComponentShowingCounter>()
+    data class Props (val counter : Get<Int>) : PropsType<Props, SubComponentShowingCounter>()
     override fun HtmlBlockTag.render() {
         div {
             newBackgroundColorOnRerender()
-            +"Counter is ${props.counter.value} ✓"
+            +"Counter is ${props.counter.get()} ✓"
         }
     }
 }

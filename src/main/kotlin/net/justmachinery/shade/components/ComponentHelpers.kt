@@ -3,16 +3,16 @@ package net.justmachinery.shade.components
 import kotlinx.html.*
 import net.justmachinery.shade.component.AdvancedComponent
 import net.justmachinery.shade.render.ComponentAdd
-import net.justmachinery.shade.state.ObservableValue
+import net.justmachinery.shade.utility.GetSet
 import net.justmachinery.shade.utility.eql
 import kotlin.reflect.KClass
 
 interface ComponentHelpers : ComponentAdd {
-    fun HtmlBlockTag.boundInput(bound : ObservableValue<String>, cb: INPUT.()->Unit){
+    fun HtmlBlockTag.boundInput(bound : GetSet<String>, cb: INPUT.()->Unit){
         boundInput(bound, {it}, {it}, cb)
     }
     fun <T> HtmlBlockTag.boundInput(
-        bound: ObservableValue<T>,
+        bound: GetSet<T>,
         toString: (T) -> String,
         fromString: (String) -> T,
         cb: INPUT.() -> Unit
@@ -27,11 +27,11 @@ interface ComponentHelpers : ComponentAdd {
             ))
     }
 
-    fun HtmlBlockTag.boundTextArea(bound : ObservableValue<String>, cb: TEXTAREA.()->Unit){
+    fun HtmlBlockTag.boundTextArea(bound : GetSet<String>, cb: TEXTAREA.()->Unit){
         boundTextArea(bound, {it}, {it}, cb)
     }
     fun <T> HtmlBlockTag.boundTextArea(
-        bound: ObservableValue<T>,
+        bound: GetSet<T>,
         toString: (T) -> String,
         fromString: (String) -> T,
         cb: TEXTAREA.() -> Unit
@@ -46,11 +46,11 @@ interface ComponentHelpers : ComponentAdd {
             ))
     }
 
-    fun HtmlBlockTag.boundSelect(bound : ObservableValue<String>, cb: SELECT.()->Unit){
+    fun HtmlBlockTag.boundSelect(bound : GetSet<String>, cb: SELECT.()->Unit){
         boundSelect(bound, {it}, {it}, cb)
     }
     fun <T> HtmlBlockTag.boundSelect(
-        bound: ObservableValue<T>,
+        bound: GetSet<T>,
         toString: (T) -> String,
         fromString: (String) -> T,
         cb: SELECT.() -> Unit
@@ -66,7 +66,7 @@ interface ComponentHelpers : ComponentAdd {
     }
 
 
-    fun HtmlBlockTag.intInput(bound : ObservableValue<Int>, cb: INPUT.()->Unit){
+    fun HtmlBlockTag.intInput(bound : GetSet<Int>, cb: INPUT.()->Unit){
         boundInput(
             bound = bound,
             fromString = { it.toIntOrNull() ?: 0 },
@@ -77,7 +77,7 @@ interface ComponentHelpers : ComponentAdd {
         }
     }
 
-    fun HtmlBlockTag.boundCheckbox(bound : ObservableValue<Boolean>, cb: INPUT.()->Unit){
+    fun HtmlBlockTag.boundCheckbox(bound : GetSet<Boolean>, cb: INPUT.()->Unit){
         add(BoundCheckbox.Props(bound, cb.eql))
     }
 }

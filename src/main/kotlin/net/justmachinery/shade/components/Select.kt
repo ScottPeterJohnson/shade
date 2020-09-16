@@ -7,14 +7,14 @@ import kotlinx.html.option
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.component.ComponentInTag
 import net.justmachinery.shade.component.PropsType
-import net.justmachinery.shade.state.ObservableValue
 import net.justmachinery.shade.utility.EqLambda
+import net.justmachinery.shade.utility.GetSet
 
 class Select<T> : Component<Select.Props<T>>() {
     data class Props<T>(
-        val selected : ObservableValue<T>,
+        val selected : GetSet<T>,
         val options : List<T>,
-        val render : (T)->String,
+        val render : EqLambda<(T)->String>,
         val customize : EqLambda<SELECT.()->Unit> = EqLambda {},
         val customizeOption : EqLambda<OPTION.(T)->Unit> = EqLambda {},
     ) : PropsType<Props<T>, Select<T>>()
@@ -35,7 +35,7 @@ class Select<T> : Component<Select.Props<T>>() {
 
 internal class SelectOption<T> : ComponentInTag<SelectOption.Props<T>, SELECT>(){
     data class Props<T>(
-        val render : (T)->String,
+        val render : EqLambda<(T)->String>,
         val customize : EqLambda<OPTION.(T)->Unit>,
         val value : T,
         val index : Int
@@ -43,7 +43,7 @@ internal class SelectOption<T> : ComponentInTag<SelectOption.Props<T>, SELECT>()
     override fun SELECT.render() {
         option {
             value = props.index.toString()
-            +props.render(props.value)
+            +props.render.raw(props.value)
             props.customize.raw(this, props.value)
         }
     }
