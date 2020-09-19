@@ -5,6 +5,7 @@ import net.justmachinery.shade.Client
 import net.justmachinery.shade.ContextErrorSource
 import net.justmachinery.shade.ShadeContext
 import net.justmachinery.shade.handlingErrors
+import net.justmachinery.shade.render.markDontRerender
 import net.justmachinery.shade.render.unmountAll
 import kotlin.reflect.KClass
 
@@ -30,11 +31,12 @@ internal fun AdvancedComponent<*,*>.doMount(){
     }
 }
 internal fun AdvancedComponent<*,*>.doUnmount(){
+    markDontRerender(this)
+    //Unmount all children
     renderState.renderTreeRoot?.let {
         unmountAll(it)
     }
 
-    client.markDontRerender(this)
     renderDependencies.dispose()
     supervisorJob.cancel()
 
@@ -46,7 +48,6 @@ internal fun AdvancedComponent<*,*>.doUnmount(){
     renderDependencies.component = null
 
     handlingErrors(ContextErrorSource.UNMOUNTING){
-        //Unmount children
         unmounted()
     }
 }

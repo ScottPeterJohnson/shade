@@ -2,12 +2,12 @@ package net.justmachinery.shade
 
 import kotlinx.coroutines.*
 import kotlinx.coroutines.slf4j.MDCContext
-import kotlinx.html.Tag
+import kotlinx.html.HtmlBlockTag
 import mu.KLogging
 import net.justmachinery.shade.component.AdvancedComponent
-import net.justmachinery.shade.component.doMount
-import net.justmachinery.shade.render.renderInternal
-import net.justmachinery.shade.render.updateRender
+import net.justmachinery.shade.component.doUnmount
+import net.justmachinery.shade.render.renderRoot
+import net.justmachinery.shade.render.rerender
 import net.justmachinery.shade.state.batchChangesUntilSuspend
 import net.justmachinery.shade.utility.Json
 import net.justmachinery.shade.utility.SingleConcurrentExecution
@@ -43,11 +43,6 @@ class Client(
      * Set of components known to be dirty and require rerendering
      */
     private val needRerender = Collections.synchronizedSet(mutableSetOf<AdvancedComponent<*, *>>())
-    /**
-     * Used to avoid excessive rerender of a component when doing batched rendering, as its parent may rerender it.
-     */
-    private var dontRerender: MutableSet<AdvancedComponent<*, *>>? = null
-    internal fun markDontRerender(component : AdvancedComponent<*, *>){ dontRerender?.add(component) }
 
     /**
      * Flag components dirty, and queue a rerender
@@ -62,12 +57,12 @@ class Client(
     /**
      * Render a root component into an existing HTML builder.
      */
-    internal fun <RenderIn : Tag> renderRoot(builder : RenderIn, component : AdvancedComponent<*, RenderIn>) = logging {
+    internal fun renderRoot(builder : HtmlBlockTag, component : ShadeRootComponent) = logging {
         logger.debug { "Rendering root $component" }
         renderLock.runSync {
+            rootComponents.add(component)
             component.client.swallowExceptions(message = { "While adding root" }) {
-                component.renderInternal(builder, addMarkers = true)
-                component.doMount()
+                component.renderRoot(builder)
             }
         }
     }
@@ -83,28 +78,15 @@ class Client(
      */
     private fun rerender() : Job = coroutineScope.launch {
         logging {
-            val rerendered = Collections.newSetFromMap<AdvancedComponent<*, *>>(WeakHashMap())
-            dontRerender = rerendered
-            try {
-                //We render from the top of the tree hierarchy down, to avoid excessive rerenders when a parent and
-                //some child both depend on some state marked dirty.
-                val ordered = synchronized(needRerender) {
-                    val result = needRerender.sortedBy { it.treeDepth }
-                    needRerender.clear()
-                    result
-                }
-                logger.debug { "Rerendering: ${ordered.joinToString(",")}" }
-                ordered.forEach {
-                    if(!rerendered.contains(it)){
-                        swallowExceptions(message = { "While rerendering $it" }) {
-                            @Suppress("UNCHECKED_CAST")
-                            (it as AdvancedComponent<*, Tag>).updateRender(it.renderIn)
-                        }
-                    }
-                }
-            } finally {
-                dontRerender = null
+            //We render from the top of the tree hierarchy down, to avoid excessive rerenders when a parent and
+            //some child both depend on some state marked dirty.
+            val ordered = synchronized(needRerender) {
+                val result = needRerender.sortedBy { it.treeDepth }
+                needRerender.clear()
+                result
             }
+            logger.debug { "Rerendering: ${ordered.joinToString(",")}" }
+            rerender(this@Client, ordered)
         }
     }
 
@@ -134,8 +116,12 @@ class Client(
     internal val supervisor = SupervisorJob()
     internal val coroutineScope = CoroutineScope(root.context + supervisor + batchChangesUntilSuspend)
 
+    private val rootComponents = mutableListOf<AdvancedComponent<*,*>>()
     internal fun cleanup(){
-        //Most cleanup will be handled by the garbage collector.
+        rootComponents.forEach {
+            it.doUnmount()
+        }
+        rootComponents.clear()
         GlobalScope.launch(root.context) {
             supervisor.cancel()
         }

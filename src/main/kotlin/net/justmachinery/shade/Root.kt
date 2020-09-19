@@ -88,7 +88,7 @@ class ShadeRoot(
      */
     fun render(tag : HtmlBlockTag, cb : (ShadeRootComponent.()->Unit)){
         installFramework(tag){client ->
-            renderComponentAsRoot(client, tag, ShadeRootComponent::class, cb.eql)
+            renderComponentAsRoot(client, tag, cb.eql)
         }
     }
 
@@ -96,25 +96,24 @@ class ShadeRoot(
      * As render, but does not create a new client (and can be used multiple times on a page)
      */
     fun renderWithClient(client: Client, tag : HtmlBlockTag, cb : (ShadeRootComponent.()->Unit)){
-        renderComponentAsRoot(client, tag, ShadeRootComponent::class, cb.eql)
+        renderComponentAsRoot(client, tag, cb.eql)
     }
 
 
-    private fun <T : Any, RenderIn : Tag> renderComponentAsRoot(
+    private fun renderComponentAsRoot(
         client : Client,
-        builder : RenderIn,
-        root : KClass<out AdvancedComponent<T, RenderIn>>,
-        props : T
+        builder : HtmlBlockTag,
+        cb : EqLambda<ShadeRootComponent.()->Unit>
     ){
         val propObj = ComponentInitData(
             client = client,
             key = null,
-            props = props,
+            props = cb,
             renderIn = builder::class,
             treeDepth = 0,
             context = ShadeContext.empty
         )
-        val component = constructComponent(root, propObj)
+        val component = constructComponent(ShadeRootComponent::class, propObj) as ShadeRootComponent
         client.renderRoot(builder, component)
     }
 

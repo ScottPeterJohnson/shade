@@ -4,24 +4,57 @@ import com.google.common.collect.BiMap
 import com.google.common.collect.HashBiMap
 import com.google.common.collect.Sets
 import com.google.gson.Gson
-import kotlinx.html.SCRIPT
-import kotlinx.html.Tag
-import kotlinx.html.TagConsumer
+import kotlinx.html.*
 import kotlinx.html.stream.appendHTML
-import kotlinx.html.visit
-import net.justmachinery.shade.ContextErrorSource
+import net.justmachinery.shade.*
 import net.justmachinery.shade.component.AdvancedComponent
 import net.justmachinery.shade.component.CallbackWrappingComponent
-import net.justmachinery.shade.component.ComponentInitData
 import net.justmachinery.shade.component.doMount
-import net.justmachinery.shade.contextInRenderingThread
-import net.justmachinery.shade.handlingErrors
 import net.justmachinery.shade.state.ChangeBatchChangePolicy
 import net.justmachinery.shade.state.runChangeBatch
-import net.justmachinery.shade.withShadeContext
 import java.io.ByteArrayOutputStream
 import java.util.*
-import kotlin.reflect.KClass
+
+private val threadRenderingBatch = ThreadLocal<RenderBatch>()
+private data class RenderBatch(
+    val dontRerender : MutableSet<AdvancedComponent<*,*>> = Collections.newSetFromMap(WeakHashMap()),
+    val mountedComponents : MutableList<AdvancedComponent<*,*>> = mutableListOf()
+)
+
+internal fun markDontRerender(component: AdvancedComponent<*, *>){
+    val batch = threadRenderingBatch.get()
+    batch?.dontRerender?.add(component)
+}
+
+private fun runRenderBatch(cb : ()->Unit){
+    val existingBatch = threadRenderingBatch.get()
+    if(existingBatch != null){
+        cb()
+    } else {
+        val newBatch = RenderBatch()
+        threadRenderingBatch.set(newBatch)
+        //Note that the change batch by default disallows changes, but may have a few crop up anyway (e.g. due to errors in render)
+        runChangeBatch(ChangeBatchChangePolicy.DISALLOWED){
+            try {
+                cb()
+            } finally {
+                threadRenderingBatch.set(null)
+                if(newBatch.mountedComponents.isNotEmpty()){
+                    runChangeBatch(ChangeBatchChangePolicy.FORCE_ALLOWED){
+                        newBatch.mountedComponents.forEach {
+                            it.doMount()
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+internal fun addMounted(component : AdvancedComponent<*,*>){
+    val batch = threadRenderingBatch.get() ?: throw IllegalStateException("Cannot add component outside render batch: $component")
+    batch.mountedComponents.add(component)
+}
+
 
 internal data class ComponentRenderState(
     val componentId : Int,
@@ -37,54 +70,33 @@ internal data class ComponentRenderState(
     //as a hacky workaround.
     var currentComponentOverride : CallbackWrappingComponent<*,*>? = null
 )
+internal fun ShadeRootComponent.renderRoot(tag : HtmlBlockTag){
+    runRenderBatch {
+        renderInternal(tag, true)
+    }
+}
 
-internal fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.renderInternal(tag : RenderIn, addMarkers : Boolean){
-    val oldRenderCallbackIds = renderState.lastRenderCallbackIds
-    renderState.lastRenderCallbackIds = TreeSet()
-    client.markDontRerender(this)
-    if(addMarkers) SCRIPT(listOfNotNull(
-        "type" to "shade",
-        "id" to "shade"+renderState.componentId.toString(),
-        this.key?.let { "data-key" to it }
-    ).toMap(), tag.consumer).visit {}
-
-    try {
-        withShadeContext(baseContext){
-            tag.run {
-                //Note that outermost here is the change batch that by default disallows changes, but may have a few crop up anyway (e.g. due to errors in render)
-                //It's important that component dependencies are recorded before the change batch processes such changes, since the component
-                //might rely on a dependency changed in render (and may need to immediately rerender)
-                runChangeBatch(ChangeBatchChangePolicy.DISALLOWED, block = {
-                    updateRenderTree(renderState) {
-                        this@renderInternal.renderDependencies.runRecordingDependencies {
-                            handlingErrors(ContextErrorSource.RENDER){
-                                this.render()
-                            }
-                        }
-                    }
-                })
-                Unit
+internal fun rerender(client: Client, components : List<AdvancedComponent<*,*> >){
+    runRenderBatch {
+        components.forEach {
+            if(!threadRenderingBatch.get().dontRerender.contains(it)){
+                client.swallowExceptions(message = { "While rerendering $it" }) {
+                    it.updateRender()
+                }
             }
-        }
-    } finally {
-        if(addMarkers) SCRIPT(mapOf(
-            "type" to "shade",
-            "id" to "shade"+renderState.componentId.toString() + "e"
-        ), tag.consumer).visit {}
-
-        Sets.difference(oldRenderCallbackIds, renderState.lastRenderCallbackIds).forEach {
-            client.removeCallback(it)
-            renderState.renderTreePathToCallbackId.inverse().remove(it)
         }
     }
 }
 
-internal fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.updateRender(clazz : KClass<out RenderIn>){
+private fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.updateRender(){
     val html = ByteArrayOutputStream().let { baos ->
         baos.writer().buffered().use {
             val consumer = it.appendHTML(prettyPrint = false)
-            val tag = clazz.java.getDeclaredConstructor(Map::class.java, TagConsumer::class.java).also { it.isAccessible = true }.newInstance(emptyMap<String,String>(), consumer)
-            renderInternal(tag, addMarkers = false)
+            val tag = renderIn.java.getDeclaredConstructor(Map::class.java, TagConsumer::class.java)
+                .also { it.isAccessible = true }
+                .newInstance(emptyMap<String,String>(), consumer)
+            @Suppress("UNCHECKED_CAST")
+            renderInternal(tag as RenderIn, addMarkers = false)
             consumer.finalize()
         }
         baos.toString(Charsets.UTF_8)
@@ -95,80 +107,43 @@ internal fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.updateRender(clazz 
     client.executeScript("r(${renderState.componentId},$escapedHtml);")
 }
 
+internal fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.renderInternal(tag : RenderIn, addMarkers : Boolean){
+    val oldRenderCallbackIds = renderState.lastRenderCallbackIds
+    renderState.lastRenderCallbackIds = TreeSet()
+    markDontRerender(this)
+    if(addMarkers) {
+        SCRIPT(listOfNotNull(
+            "type" to "shade",
+            "id" to "shade"+renderState.componentId.toString(),
+            this.key?.let { "data-key" to it }
+        ).toMap(), tag.consumer).visit {}
+    }
 
-fun <T : Any, RenderIn : Tag> addComponent(
-    parent : AdvancedComponent<*, *>,
-    block : RenderIn,
-    component : KClass<out AdvancedComponent<T, RenderIn>>,
-    renderIn : KClass<out Tag>,
-    props : T,
-    key : String? = null
-){
-    val (renderType, comp) = getOrConstructComponent(parent, component, renderIn, props, key)
-    when(renderType){
-        GetComponentResult.NEW, GetComponentResult.EXISTING_RERENDER -> {
-            comp.renderInternal(block, addMarkers = true)
-            if(renderType == GetComponentResult.NEW){
-                runChangeBatch(ChangeBatchChangePolicy.FORCE_ALLOWED){
-                    comp.doMount()
+    try {
+        withShadeContext(baseContext){
+            tag.run {
+                updateRenderTree(renderState) {
+                    this@renderInternal.renderDependencies.runRecordingDependencies {
+                        handlingErrors(ContextErrorSource.RENDER){
+                            this.render()
+                        }
+                    }
                 }
+                Unit
             }
         }
-        GetComponentResult.EXISTING_KEEP -> {
-            SCRIPT(listOfNotNull(
+    } finally {
+        if(addMarkers) {
+            SCRIPT(mapOf(
                 "type" to "shade",
-                "id" to "shade"+comp.renderState.componentId.toString(),
-                "data-shade-keep" to "true",
-                comp.key?.let { "data-key" to it }
-            ).toMap(), block.consumer).visit {}
+                "id" to "shade"+renderState.componentId.toString() + "e"
+            ), tag.consumer).visit {}
         }
-    }
 
-    parent.renderState.location?.let {
-        it.newRenderTreeLocation.children.add(RenderTreeChild.ComponentChild(it.renderTreeChildIndex, comp))
-        it.renderTreeChildIndex += 1
+        Sets.difference(oldRenderCallbackIds, renderState.lastRenderCallbackIds).forEach {
+            client.removeCallback(it)
+            renderState.renderTreePathToCallbackId.inverse().remove(it)
+        }
     }
 }
 
-private enum class GetComponentResult {
-    NEW,
-    EXISTING_RERENDER,
-    EXISTING_KEEP
-}
-
-private fun <T : Any, RenderIn : Tag> getOrConstructComponent(
-    parent : AdvancedComponent<*, *>,
-    component : KClass<out AdvancedComponent<T, RenderIn>>,
-    renderIn : KClass<out Tag>,
-    props : T,
-    key : String? = null
-) : Pair<GetComponentResult, AdvancedComponent<T, RenderIn>> {
-    parent.renderState.location?.let { frame ->
-        val oldComponent = if(key != null){
-            frame.oldRenderTreeLocation?.children?.firstOrNull { it is RenderTreeChild.ComponentChild && it.component.key == key }
-        } else {
-            frame.oldRenderTreeLocation?.children?.getOrNull(frame.renderTreeChildIndex)
-        }
-        if(oldComponent is RenderTreeChild.ComponentChild && oldComponent.component::class == component){
-            @Suppress("UNCHECKED_CAST")
-            (oldComponent.component as AdvancedComponent<T, RenderIn>)
-            return if(oldComponent.component.props == props){
-                GetComponentResult.EXISTING_KEEP to oldComponent.component
-            } else {
-                oldComponent.component.props = props
-                GetComponentResult.EXISTING_RERENDER to oldComponent.component
-            }
-        }
-    }
-    return GetComponentResult.NEW to parent.client.root.constructComponent(
-        component,
-        ComponentInitData(
-            client = parent.client,
-            props = props,
-            key = key,
-            renderIn = renderIn,
-            treeDepth = parent.treeDepth + 1,
-            context = contextInRenderingThread.get()!!
-        )
-    )
-}
