@@ -49,8 +49,7 @@ interface ComponentAdd : ComponentBase {
         add(
             FunctionComponent::class as KClass<FunctionComponent<RenderIn>>,
             FunctionComponent.Props(
-                cb = cb.eql,
-                parent = thisComponent()
+                cb = cb.eql
             )
         )
     }
@@ -68,7 +67,7 @@ private fun <T : Any, RenderIn : Tag> addComponent(
     val (renderType, comp) = getOrConstructComponent(parent, component, renderIn, props, key)
     when(renderType){
         GetComponentResult.NEW, GetComponentResult.EXISTING_RERENDER -> {
-            comp.renderInternal(block, addMarkers = true)
+            renderInternal(comp, block, addMarkers = true)
             if(renderType == GetComponentResult.NEW){
                 addMounted(comp)
             }

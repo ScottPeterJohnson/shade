@@ -4,8 +4,8 @@ import kotlinx.html.HtmlTagMarker
 import kotlinx.html.Tag
 import net.justmachinery.shade.addContext
 import net.justmachinery.shade.component.AdvancedComponent
-import net.justmachinery.shade.component.CallbackWrappingComponent
-import net.justmachinery.shade.component.ComponentInitData
+import net.justmachinery.shade.component.ComponentInTag
+import net.justmachinery.shade.component.PropsType
 import net.justmachinery.shade.currentContext
 import net.justmachinery.shade.handleErrors
 import net.justmachinery.shade.routing.annotation.ParamsHolderSupport
@@ -91,20 +91,19 @@ class WithRouting<RenderIn : Tag>(
     fun getParam(name : String) : ObservableValue<String?> = routingContext.pathData.getParam(name)
 }
 
-internal class RoutingComponent<RenderIn : Tag>(fullProps : ComponentInitData<Props<RenderIn>>) : CallbackWrappingComponent<RenderIn, RoutingComponent.Props<RenderIn>>(fullProps) {
+internal class RoutingComponent<RenderIn : Tag> : ComponentInTag<RoutingComponent.Props<RenderIn>, RenderIn>() {
     data class Props<RenderIn : Tag>(
-        override val cb : EqLambda<WithRouting<RenderIn>.() -> Unit>,
-        override val parent : AdvancedComponent<*, *>
-    ) : BaseProps
+        val cb : EqLambda<WithRouting<RenderIn>.() -> Unit>
+    ) : PropsType<Props<RenderIn>, RoutingComponent<RenderIn>>()
 
     private var error by obs<Throwable?>(null)
     private var lastPathUpdate = -1
 
-    override fun RenderIn.callCb() {
+    override fun RenderIn.render() {
         val setupRouting = props.cb.raw
         val withRouting = WithRouting(
             this@RoutingComponent,
-            this@callCb
+            this
         )
         setupRouting(withRouting)
         val hasNotFoundHandlers = withRouting.notFoundHandlers.isNotEmpty()

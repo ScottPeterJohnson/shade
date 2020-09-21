@@ -154,3 +154,23 @@ sealed class ErrorOr<T> {
         is Result -> this.result
     }
 }
+
+fun applyWrappers(wrappers : List<(()->Unit)->Unit>, cb : ()->Unit){
+    if(wrappers.isEmpty()){
+        cb()
+    } else {
+        (wrappers.first()){
+            applyWrappers(wrappers.drop(1), cb)
+        }
+    }
+}
+
+inline fun <T,R> ThreadLocal<T>.withValue(value : T, cb: ()->R) : R {
+    val oldValue = get()
+    set(value)
+    return try {
+        cb()
+    } finally {
+        set(oldValue)
+    }
+}

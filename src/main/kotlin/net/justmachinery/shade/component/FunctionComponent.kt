@@ -6,13 +6,15 @@ import net.justmachinery.shade.utility.EqLambda
 /**
  * A component that just delegates to a render function
  */
-class FunctionComponent<RenderIn : Tag>(fullProps : ComponentInitData<Props<RenderIn>>) : CallbackWrappingComponent<RenderIn, FunctionComponent.Props<RenderIn>>(fullProps) {
+class FunctionComponent<RenderIn : Tag> : ComponentInTag<FunctionComponent.Props<RenderIn>, RenderIn>() {
     data class Props<RenderIn : Tag>(
-        override val cb : EqLambda<RenderIn.() -> Unit>,
-        override val parent : AdvancedComponent<*, *>
-    ) : BaseProps
-    override fun RenderIn.callCb() {
+        val cb : EqLambda<RenderIn.() -> Unit>
+    ) : PropsType<Props<RenderIn>, FunctionComponent<RenderIn>>()
+
+    override fun RenderIn.render() {
         val cb = props.cb.raw
         cb()
     }
+
+    override fun toString() = "FunctionComponent(${props.cb.raw})"
 }

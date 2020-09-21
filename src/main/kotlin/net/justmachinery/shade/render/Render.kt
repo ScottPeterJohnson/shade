@@ -8,14 +8,17 @@ import kotlinx.html.*
 import kotlinx.html.stream.appendHTML
 import net.justmachinery.shade.*
 import net.justmachinery.shade.component.AdvancedComponent
-import net.justmachinery.shade.component.CallbackWrappingComponent
 import net.justmachinery.shade.component.doMount
 import net.justmachinery.shade.state.ChangeBatchChangePolicy
 import net.justmachinery.shade.state.runChangeBatch
+import net.justmachinery.shade.utility.applyWrappers
+import net.justmachinery.shade.utility.withValue
 import java.io.ByteArrayOutputStream
 import java.util.*
 
 private val threadRenderingBatch = ThreadLocal<RenderBatch>()
+internal val currentlyRendering = ThreadLocal<AdvancedComponent<*,*>>()
+
 private data class RenderBatch(
     val dontRerender : MutableSet<AdvancedComponent<*,*>> = Collections.newSetFromMap(WeakHashMap()),
     val mountedComponents : MutableList<AdvancedComponent<*,*>> = mutableListOf()
@@ -38,7 +41,7 @@ private fun runRenderBatch(cb : ()->Unit){
             try {
                 cb()
             } finally {
-                threadRenderingBatch.set(null)
+                threadRenderingBatch.remove()
                 if(newBatch.mountedComponents.isNotEmpty()){
                     runChangeBatch(ChangeBatchChangePolicy.FORCE_ALLOWED){
                         newBatch.mountedComponents.forEach {
@@ -65,14 +68,11 @@ internal data class ComponentRenderState(
     //Stores callback IDs associated with this component, allowing cleanup on rerender
     var lastRenderCallbackIds : SortedSet<Long> = sortedSetOf(),
     //Allows for callback ID reuse for the same event in the same place in the render tree, which allows for delay compensation
-    var renderTreePathToCallbackId : BiMap<Pair<RenderTreeTagLocation, String>, Long> = HashBiMap.create(0),
-    //Temporary storage is necessary due to Kotlin's current lack of functions with two receivers,
-    //as a hacky workaround.
-    var currentComponentOverride : CallbackWrappingComponent<*,*>? = null
+    var renderTreePathToCallbackId : BiMap<Pair<RenderTreeTagLocation, String>, Long> = HashBiMap.create(0)
 )
 internal fun ShadeRootComponent.renderRoot(tag : HtmlBlockTag){
     runRenderBatch {
-        renderInternal(tag, true)
+        renderInternal(this, tag, true)
     }
 }
 
@@ -96,7 +96,7 @@ private fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.updateRender(){
                 .also { it.isAccessible = true }
                 .newInstance(emptyMap<String,String>(), consumer)
             @Suppress("UNCHECKED_CAST")
-            renderInternal(tag as RenderIn, addMarkers = false)
+            renderInternal(this, tag as RenderIn, addMarkers = false)
             consumer.finalize()
         }
         baos.toString(Charsets.UTF_8)
@@ -107,29 +107,32 @@ private fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.updateRender(){
     client.executeScript("r(${renderState.componentId},$escapedHtml);")
 }
 
-internal fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.renderInternal(tag : RenderIn, addMarkers : Boolean){
+internal fun <RenderIn : Tag> renderInternal(
+    component: AdvancedComponent<*, RenderIn>,
+    tag : RenderIn,
+    addMarkers : Boolean
+){
+    val renderState = component.renderState
     val oldRenderCallbackIds = renderState.lastRenderCallbackIds
     renderState.lastRenderCallbackIds = TreeSet()
-    markDontRerender(this)
+    markDontRerender(component)
     if(addMarkers) {
         SCRIPT(listOfNotNull(
             "type" to "shade",
             "id" to "shade"+renderState.componentId.toString(),
-            this.key?.let { "data-key" to it }
+            component.key?.let { "data-key" to it }
         ).toMap(), tag.consumer).visit {}
     }
 
     try {
-        withShadeContext(baseContext){
-            tag.run {
-                updateRenderTree(renderState) {
-                    this@renderInternal.renderDependencies.runRecordingDependencies {
-                        handlingErrors(ContextErrorSource.RENDER){
-                            this.render()
-                        }
-                    }
-                }
-                Unit
+        tag.updateRenderTree(renderState) {
+            applyWrappers(listOf(
+                { component.renderDependencies.runRecordingDependencies(it) },
+                { withShadeContext(component.baseContext, it) },
+                { component.handlingErrors(ContextErrorSource.RENDER, it) },
+                { currentlyRendering.withValue(component, it) }
+            )){
+                component.run { render() }
             }
         }
     } finally {
@@ -141,7 +144,7 @@ internal fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.renderInternal(tag 
         }
 
         Sets.difference(oldRenderCallbackIds, renderState.lastRenderCallbackIds).forEach {
-            client.removeCallback(it)
+            component.client.removeCallback(it)
             renderState.renderTreePathToCallbackId.inverse().remove(it)
         }
     }

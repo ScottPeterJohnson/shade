@@ -1,6 +1,7 @@
 package net.justmachinery.shade.state
 
 import net.justmachinery.shade.component.AdvancedComponent
+import net.justmachinery.shade.utility.withValue
 import kotlin.reflect.KProperty
 
 
@@ -10,15 +11,12 @@ sealed class ReactiveObserver {
     internal abstract val observing: MutableSet<Atom>
 
     internal fun <T> runRecordingDependencies(run : ()->T) : T {
-        val previousObserveBlock = observeBlock.get()
         val newState = mutableSetOf<Atom>()
-        observeBlock.set(newState)
-
         try {
-            return run()
+            observeBlock.withValue(newState) {
+                return run()
+            }
         } finally {
-            observeBlock.set(previousObserveBlock)
-
             observing.removeAll { dependency ->
                 if (dependency !in newState) {
                     dependency.observers.remove(this)

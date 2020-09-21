@@ -7,6 +7,7 @@ import mu.KLogging
 import net.justmachinery.shade.components.ComponentHelpers
 import net.justmachinery.shade.render.ComponentAdd
 import net.justmachinery.shade.render.ComponentRenderState
+import net.justmachinery.shade.render.currentlyRendering
 import net.justmachinery.shade.routing.base.ComponentRouting
 import net.justmachinery.shade.state.Reaction
 import net.justmachinery.shade.state.Render
@@ -39,7 +40,7 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
     internal val renderDependencies = Render(this)
 
     internal val supervisorJob = SupervisorJob(parent = fullProps.client.supervisor)
-    override val coroutineContext: CoroutineContext get() = supervisorJob
+    override val coroutineContext: CoroutineContext get() = realComponentThis().supervisorJob
 
     internal var reactions : MutableList<Reaction>? = null
 
@@ -53,7 +54,7 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
     open fun unmounted(){}
 
     override fun thisComponent() = this
-    override fun realComponentThis() = this.renderState.currentComponentOverride ?: this
+    override fun realComponentThis() = currentlyRendering.get() ?: this
 }
 
 class MountingContext(private val component: AdvancedComponent<*,*>) {

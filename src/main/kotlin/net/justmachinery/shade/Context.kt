@@ -1,6 +1,7 @@
 package net.justmachinery.shade
 
 import net.justmachinery.shade.component.AdvancedComponent
+import net.justmachinery.shade.utility.withValue
 import java.util.concurrent.atomic.AtomicInteger
 
 fun currentContext() = contextInRenderingThread.get() ?: ShadeContext.empty
@@ -36,15 +37,7 @@ class ShadeContext(
     }
 }
 
-internal inline fun <T> withShadeContext(context : ShadeContext, cb : ()->T) : T {
-    val oldContext = contextInRenderingThread.get()
-    try {
-        contextInRenderingThread.set(context)
-        return cb()
-    } finally {
-        contextInRenderingThread.set(oldContext)
-    }
-}
+internal inline fun <T> withShadeContext(context : ShadeContext, cb : ()->T) = contextInRenderingThread.withValue(context, cb)
 
 class ShadeContextValue<T>(val identifier : ShadeContextIdentifier<T>, val value : T)
 

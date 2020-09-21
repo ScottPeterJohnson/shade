@@ -41,11 +41,11 @@ private fun <RenderIn : Tag> RenderIn.doRouting(
     component: AdvancedComponent<*, *>,
     cb : WithRouting<RenderIn>.()->Unit
 ){
+    @Suppress("UNCHECKED_CAST")
     component.run {
-        @Suppress("UNCHECKED_CAST")
         add(
             component = RoutingComponent::class as KClass<RoutingComponent<RenderIn>>,
-            props = RoutingComponent.Props(cb = cb.eql, parent = component)
+            props = RoutingComponent.Props(cb = cb.eql)
         )
     }
 }

@@ -62,16 +62,15 @@ class ShadeRoot(
     internal fun <T : Any, RenderIn : Tag> constructComponent(clazz : KClass<out AdvancedComponent<T, RenderIn>>, props : ComponentInitData<T>) : AdvancedComponent<T, RenderIn> {
         val component = when {
             clazz == FunctionComponent::class -> {
-                @Suppress("UNCHECKED_CAST")
-                FunctionComponent(props as ComponentInitData<FunctionComponent.Props<RenderIn>>) as AdvancedComponent<T, RenderIn>
+                componentPassProps.withValue(props){
+                    @Suppress("UNCHECKED_CAST")
+                    FunctionComponent<RenderIn>() as AdvancedComponent<T, RenderIn>
+                }
             }
             clazz.isSubclassOf(Component::class) || clazz.isSubclassOf(
                 ComponentInTag::class) -> {
-                try {
-                    componentPassProps.set(props)
+                componentPassProps.withValue(props){
                     clazz.java.getDeclaredConstructor().also { it.isAccessible = true }.newInstance()
-                } finally {
-                    componentPassProps.remove()
                 }
             }
             else -> {
