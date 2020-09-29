@@ -4,7 +4,7 @@ import kotlinx.html.*
 import net.justmachinery.shade.component.AdvancedComponent
 import net.justmachinery.shade.render.ComponentAdd
 import net.justmachinery.shade.utility.GetSet
-import net.justmachinery.shade.utility.eql
+import net.justmachinery.shade.utility.eqL
 import kotlin.reflect.KClass
 
 interface ComponentHelpers : ComponentAdd {
@@ -21,9 +21,9 @@ interface ComponentHelpers : ComponentAdd {
         add(
             BoundInput::class as KClass<out AdvancedComponent<BoundTag.Props<T, INPUT>, HtmlBlockTag>>, BoundTag.Props(
                 bound = bound,
-                cb = cb.eql,
-                toString = toString.eql,
-                fromString = fromString.eql
+                cb = cb.eqL,
+                toString = toString.eqL,
+                fromString = fromString.eqL
             ))
     }
 
@@ -40,9 +40,9 @@ interface ComponentHelpers : ComponentAdd {
         add(
             BoundTextArea::class as KClass<out AdvancedComponent<BoundTag.Props<T, TEXTAREA>, HtmlBlockTag>>, BoundTag.Props(
                 bound = bound,
-                cb = cb.eql,
-                toString = toString.eql,
-                fromString = fromString.eql
+                cb = cb.eqL,
+                toString = toString.eqL,
+                fromString = fromString.eqL
             ))
     }
 
@@ -59,9 +59,9 @@ interface ComponentHelpers : ComponentAdd {
         add(
             BoundSelect::class as KClass<out AdvancedComponent<BoundTag.Props<T, SELECT>, HtmlBlockTag>>, BoundTag.Props(
                 bound = bound,
-                cb = cb.eql,
-                toString = toString.eql,
-                fromString = fromString.eql
+                cb = cb.eqL,
+                toString = toString.eqL,
+                fromString = fromString.eqL
             ))
     }
 
@@ -78,6 +78,6 @@ interface ComponentHelpers : ComponentAdd {
     }
 
     fun HtmlBlockTag.boundCheckbox(bound : GetSet<Boolean>, cb: INPUT.()->Unit){
-        add(BoundCheckbox.Props(bound, cb.eql))
+        add(BoundCheckbox.Props(bound, cb.eqL))
     }
 }

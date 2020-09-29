@@ -1,9 +1,6 @@
 package net.justmachinery.shade
 
-import kotlinx.html.body
 import kotlinx.html.h2
-import kotlinx.html.html
-import kotlinx.html.stream.createHTML
 import net.justmachinery.shade.components.RootComponent
 import net.justmachinery.shade.routing.base.UrlInfo
 import org.eclipse.jetty.websocket.api.Session
@@ -25,26 +22,28 @@ fun main(){
     Service.ignite().apply {
         port(9905)
 
+        //You don't have to serve the Shade client stub statically (it can be dynamically included), but it's recommended to do so.
+        staticFiles.location("js")
         //Setup a websocket handler
         webSocketIdleTimeoutMillis(120 * 1000)
         webSocket("/shade", WebSocketHandler::class.java)
 
         //Create a test page that uses shade.
         val shadeDemo = Route { request, response ->
-            createHTML(prettyPrint = false).html {
+            //This is Jetty specific; it uses ISO8609 by default
+            response.raw().characterEncoding = "UTF-8"
+            //Let's throw some shade:
+            root.render(response.raw().writer) {
+                head {}
                 body {
-                    //You can mix shade with normal kotlinx HTML templates.
                     h2 {
                         +"Shade test page"
                     }
-                    //Let's throw some shade:
-                    root.render(this){
-                        //Look at RootComponent for a more in-depth overview of how to render with shade
-                        add(RootComponent::class, UrlInfo.of(
-                            request.pathInfo(),
-                            request.queryString()
-                        ))
-                    }
+                    //Look at RootComponent for a more in-depth overview of how to render with shade
+                    add(RootComponent::class, UrlInfo.of(
+                        request.pathInfo(),
+                        request.queryString()
+                    ))
                 }
             }
         }
@@ -57,8 +56,11 @@ fun main(){
     }
 }
 
+
+
 val root = ShadeRoot(
-    endpoint = "/shade"
+    endpoint = "/shade",
+    addScriptStrategy = AddScriptStrategy.AtPath("/shade-bundle.js")
 )
 
 /**
@@ -79,7 +81,7 @@ class WebSocketHandler {
     fun message(session: Session, message: String) {
         sessions.getOrPut(session){
             root.handler(
-                send = { session.remote.sendString(it) },
+                send = { session.remote.sendStringByFuture(it) },
                 disconnect = { session.disconnect() }
             )
         }.onMessage(message)

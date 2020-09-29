@@ -1,35 +1,35 @@
 package net.justmachinery.shade.component
 
-import com.google.gson.Gson
-import kotlinx.html.*
+import kotlinx.html.Tag
+import net.justmachinery.shade.AttributeNames
+import net.justmachinery.shade.DirectiveType
 import net.justmachinery.shade.ERROR_HANDLER_IDENTIFIER
 import net.justmachinery.shade.currentContext
-import net.justmachinery.shade.render.RenderTreeRecorderConsumer
+import net.justmachinery.shade.render.scriptDirective
+import net.justmachinery.shade.render.shade
 import net.justmachinery.shade.render.toRenderTreeTagLocation
 import net.justmachinery.shade.utility.Json
+import net.justmachinery.shade.utility.gson
 
 interface EventHandlers : ComponentBase {
     //Event CB helpers
-    private fun CommonAttributeGroupFacade.callbackString(
+    private fun Tag.addEventCallback(
         eventName : String,
-        prefix : String,
-        suffix : String,
+        prefix : String?,
+        suffix : String?,
         data : String?,
         cb : suspend (Json?)->Unit
-    ): String {
+    ) {
         //We want to use the same callback ID for callbacks that are attached to the same event listener on the same
         //DOM path in this component; this makes dealing with time delays where a client sends a valid event but Shade
         //updates much easier.
-        val cons = consumer as RenderTreeRecorderConsumer
-        val pos = cons.frameStack.peek().newRenderTreeLocation.toRenderTreeTagLocation()
+        val cons = consumer.shade
+        val pos = cons.recorder!!.frameStack.peek().newRenderTreeLocation.toRenderTreeTagLocation()
 
         val realThis = realComponentThis()
         val old = realThis.renderState.renderTreePathToCallbackId[pos to eventName]
 
-        val (id, js) = realThis.client.eventCallbackStringInternal(
-            prefix = prefix,
-            suffix = suffix,
-            data = data,
+        val id = realThis.client.eventCallbackId(
             forceId = old,
             errorHandler = currentContext()[ERROR_HANDLER_IDENTIFIER],
             cb = cb
@@ -38,101 +38,109 @@ interface EventHandlers : ComponentBase {
             realThis.renderState.renderTreePathToCallbackId[pos to eventName] = id
         }
         realThis.renderState.lastRenderCallbackIds.add(id)
-        return js
+
+        scriptDirective(DirectiveType.EventHandler, data = listOfNotNull(
+            prefix?.let { AttributeNames.EventPrefix to it },
+            suffix?.let { AttributeNames.EventSuffix to it },
+            data?.let { AttributeNames.EventData to it },
+            AttributeNames.EventName to eventName,
+            AttributeNames.EventCallbackId to id.toString()
+        ))
     }
 
 
-    fun CommonAttributeGroupFacade.onValueChange(
-        prefix: String = "",
-        suffix: String = "",
+
+    fun Tag.onValueChange(
+        prefix: String? = null,
+        suffix: String? = null,
         cb: suspend (String) -> Unit
     ) {
-        onChange = callbackString(
-            eventName = "onChange",
+        addEventCallback(
+            eventName = "change",
             prefix = prefix,
             suffix = suffix,
             data = "it.value",
-            cb = { cb(Gson().fromJson(it!!.raw, String::class.java)) }
+            cb = { cb(gson.fromJson(it!!.raw, String::class.java)) }
         )
     }
 
-    fun CommonAttributeGroupFacade.onValueInput(
-        prefix: String = "",
-        suffix: String = "",
+    fun Tag.onValueInput(
+        prefix: String? = null,
+        suffix: String? = null,
         cb: suspend (String) -> Unit
     ) {
-        onInput = callbackString(
-            eventName = "onInput",
+        addEventCallback(
+            eventName = "input",
             prefix = prefix,
             suffix = suffix,
             data = "it.value",
-            cb = { cb(Gson().fromJson(it!!.raw, String::class.java)) }
+            cb = { cb(gson.fromJson(it!!.raw, String::class.java)) }
         )
     }
 
     //fun .*\.(on[^(]+)\(.*
-    //fun CommonAttributeGroupFacade.$1(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { $1 = callbackString(eventName = "$1", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    //fun Tag.$1(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { $1 = callbackString(eventName = "$1", prefix = prefix, suffix = suffix, data = data, cb = cb) }
 
-    fun CommonAttributeGroupFacade.onAbort(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onAbort = callbackString(eventName = "onAbort", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onBlur(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onBlur = callbackString(eventName = "onBlur", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onCanPlay(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onCanPlay = callbackString(eventName = "onCanPlay", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onCanPlayThrough(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onCanPlayThrough = callbackString(eventName = "onCanPlayThrough", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onChange(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onChange = callbackString(eventName = "onChange", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onClick(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onClick = callbackString(eventName = "onClick", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onContextMenu(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onContextMenu = callbackString(eventName = "onContextMenu", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onDoubleClick(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onDoubleClick = callbackString(eventName = "onDoubleClick", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onDrag(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onDrag = callbackString(eventName = "onDrag", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onDragEnd(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onDragEnd = callbackString(eventName = "onDragEnd", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onDragEnter(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onDragEnter = callbackString(eventName = "onDragEnter", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onDragLeave(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onDragLeave = callbackString(eventName = "onDragLeave", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onDragOver(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onDragOver = callbackString(eventName = "onDragOver", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onDragStart(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onDragStart = callbackString(eventName = "onDragStart", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onDrop(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onDrop = callbackString(eventName = "onDrop", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onDurationChange(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onDurationChange = callbackString(eventName = "onDurationChange", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onEmptied(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onEmptied = callbackString(eventName = "onEmptied", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onEnded(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onEnded = callbackString(eventName = "onEnded", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onError(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onError = callbackString(eventName = "onError", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onFocus(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onFocus = callbackString(eventName = "onFocus", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onFocusIn(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onFocusIn = callbackString(eventName = "onFocusIn", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onFocusOut(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onFocusOut = callbackString(eventName = "onFocusOut", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onFormChange(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onFormChange = callbackString(eventName = "onFormChange", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onFormInput(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onFormInput = callbackString(eventName = "onFormInput", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onInput(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onInput = callbackString(eventName = "onInput", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onInvalid(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onInvalid = callbackString(eventName = "onInvalid", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onKeyDown(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onKeyDown = callbackString(eventName = "onKeyDown", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onKeyPress(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onKeyPress = callbackString(eventName = "onKeyPress", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onKeyUp(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onKeyUp = callbackString(eventName = "onKeyUp", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onLoad(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onLoad = callbackString(eventName = "onLoad", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onLoadedData(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onLoadedData = callbackString(eventName = "onLoadedData", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onLoadedMetaData(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onLoadedMetaData = callbackString(eventName = "onLoadedMetaData", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onLoadStart(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onLoadStart = callbackString(eventName = "onLoadStart", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onMouseDown(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onMouseDown = callbackString(eventName = "onMouseDown", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onMouseMove(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onMouseMove = callbackString(eventName = "onMouseMove", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onMouseOut(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onMouseOut = callbackString(eventName = "onMouseOut", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onMouseOver(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onMouseOver = callbackString(eventName = "onMouseOver", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onMouseUp(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onMouseUp = callbackString(eventName = "onMouseUp", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onMouseWheel(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onMouseWheel = callbackString(eventName = "onMouseWheel", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onPause(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onPause = callbackString(eventName = "onPause", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onPlay(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onPlay = callbackString(eventName = "onPlay", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onPlaying(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onPlaying = callbackString(eventName = "onPlaying", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onProgress(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onProgress = callbackString(eventName = "onProgress", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onRateChange(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onRateChange = callbackString(eventName = "onRateChange", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onReadyStateChange(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onReadyStateChange = callbackString(eventName = "onReadyStateChange", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onScroll(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onScroll = callbackString(eventName = "onScroll", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onSearch(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onSearch = callbackString(eventName = "onSearch", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onSeeked(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onSeeked = callbackString(eventName = "onSeeked", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onSeeking(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onSeeking = callbackString(eventName = "onSeeking", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onSelect(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onSelect = callbackString(eventName = "onSelect", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onShow(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onShow = callbackString(eventName = "onShow", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onStalled(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onStalled = callbackString(eventName = "onStalled", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onSubmit(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onSubmit = callbackString(eventName = "onSubmit", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onSuspend(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onSuspend = callbackString(eventName = "onSuspend", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onTimeUpdate(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onTimeUpdate = callbackString(eventName = "onTimeUpdate", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onTouchCancel(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onTouchCancel = callbackString(eventName = "onTouchCancel", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onTouchEnd(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onTouchEnd = callbackString(eventName = "onTouchEnd", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onTouchMove(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onTouchMove = callbackString(eventName = "onTouchMove", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onTouchStart(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onTouchStart = callbackString(eventName = "onTouchStart", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onVolumeChange(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onVolumeChange = callbackString(eventName = "onVolumeChange", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onWaiting(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onWaiting = callbackString(eventName = "onWaiting", prefix = prefix, suffix = suffix, data = data, cb = cb) }
-    fun CommonAttributeGroupFacade.onWheel(prefix : String = "", suffix : String = "", data : String? = null, cb : suspend (Json?)->Unit) { onWheel = callbackString(eventName = "onWheel", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onAbort(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "abort", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onBlur(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "blur", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onCanPlay(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "canplay", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onCanPlayThrough(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "canplaythrough", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onChange(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "change", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onClick(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "click", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onContextMenu(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "contextmenu", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onDoubleClick(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "doubleclick", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onDrag(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "drag", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onDragEnd(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "dragend", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onDragEnter(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "dragenter", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onDragLeave(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "dragleave", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onDragOver(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "dragover", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onDragStart(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "dragstart", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onDrop(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "drop", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onDurationChange(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "durationchange", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onEmptied(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "emptied", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onEnded(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "ended", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onError(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "error", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onFocus(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "focus", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onFocusIn(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "focusin", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onFocusOut(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "focusout", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onFormChange(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "formchange", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onFormInput(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "forminput", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onInput(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "input", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onInvalid(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "invalid", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onKeyDown(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "keydown", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onKeyPress(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "keypress", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onKeyUp(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "keyup", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onLoad(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "load", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onLoadedData(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "loadeddata", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onLoadedMetaData(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "loadedmetadata", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onLoadStart(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "loadstart", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onMouseDown(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "mousedown", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onMouseMove(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "mousemove", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onMouseOut(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "mouseout", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onMouseOver(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "mouseover", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onMouseUp(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "mouseup", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onMouseWheel(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "mousewheel", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onPause(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "pause", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onPlay(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "play", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onPlaying(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "playing", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onProgress(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "progress", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onRateChange(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "ratechange", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onReadyStateChange(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "readystatechange", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onScroll(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "scroll", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onSearch(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "search", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onSeeked(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "seeked", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onSeeking(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "seeking", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onSelect(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "select", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onShow(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "show", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onStalled(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "stalled", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onSubmit(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "submit", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onSuspend(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "suspend", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onTimeUpdate(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "timeupdate", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onTouchCancel(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "touchcancel", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onTouchEnd(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "touchend", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onTouchMove(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "touchmove", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onTouchStart(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "touchstart", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onVolumeChange(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "volumechange", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onWaiting(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "waiting", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+    fun Tag.onWheel(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "wheel", prefix = prefix, suffix = suffix, data = data, cb = cb) }
 }

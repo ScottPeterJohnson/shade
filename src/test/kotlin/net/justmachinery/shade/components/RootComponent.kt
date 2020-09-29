@@ -2,9 +2,6 @@ package net.justmachinery.shade.components
 
 import kotlinx.coroutines.launch
 import kotlinx.html.*
-import net.justmachinery.shade.ApplyJsTest
-import net.justmachinery.shade.ComputedState
-import net.justmachinery.shade.KeyRerenderTest
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.component.MountingContext
 import net.justmachinery.shade.newBackgroundColorOnRerender
@@ -76,6 +73,8 @@ class RootPageComponent : Component<Unit>(){
             add(BoundInputTest::class)
 
             add(ReactTest::class)
+
+            add(AttributeSetTest::class)
 
             h2 { +"Demo settings" }
 

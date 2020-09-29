@@ -1,9 +1,9 @@
 package net.justmachinery.shade.render
 
 import kotlinx.html.Tag
-import kotlinx.html.TagConsumer
 import net.justmachinery.shade.component.AdvancedComponent
 import net.justmachinery.shade.component.doUnmount
+import net.justmachinery.shade.scriptTypeSignifier
 import java.util.*
 
 
@@ -67,33 +67,29 @@ internal fun <T : Tag> T.updateRenderTree(
 internal fun <T : Tag> renderTreeTagRecorder(parentTag : T, renderState: ComponentRenderState, cb : T.()->Unit) : T {
     val frameStack = Stack<RenderTreeLocationFrame>()
     frameStack.push(renderState.location!!)
-    val consumer = parentTag.consumer
-    val newConsumer = RenderTreeRecorderConsumer(
-        base = if(consumer is RenderTreeRecorderConsumer) consumer.base else consumer,
+    val consumer = parentTag.consumer.shade
+    val oldRecorder = consumer.recorder
+    consumer.recorder = RenderTreeRecorder(
         frameStack = frameStack,
         renderState = renderState
     )
-
-    val field = parentTag::class.java.getDeclaredField("consumer").also { it.isAccessible = true }
-    field.set(parentTag, newConsumer)
     try {
         parentTag.run {
             cb()
         }
     } finally {
-        field.set(parentTag, consumer)
+        consumer.recorder = oldRecorder
     }
 
     return parentTag
 }
 
-internal class RenderTreeRecorderConsumer(
-    val base : TagConsumer<*>,
+internal class RenderTreeRecorder(
     val frameStack : Stack<RenderTreeLocationFrame>,
     val renderState: ComponentRenderState
-) : TagConsumer<Any?> by base {
-    override fun onTagStart(tag: Tag) {
-        if(tag.tagName != "script" || tag.attributes["type"] != "shade"){
+) {
+    fun onTagStart(tag: Tag) {
+        if(!tag.isShadeDirective()){
             val oldFrame = frameStack.peek()
             val child = RenderTreeLocation(
                 parent = oldFrame.newRenderTreeLocation,
@@ -116,11 +112,9 @@ internal class RenderTreeRecorderConsumer(
 
             renderState.location = newFrame
         }
-
-        base.onTagStart(tag)
     }
-    override fun onTagEnd(tag: Tag) {
-        if(tag.tagName != "script" || tag.attributes["type"] != "shade") {
+    fun onTagEnd(tag: Tag) {
+        if(!tag.isShadeDirective()) {
             val endingFrame = frameStack.pop()
             val parentFrame = frameStack.peek()
             endingFrame.newRenderTreeLocation.let {
@@ -130,9 +124,9 @@ internal class RenderTreeRecorderConsumer(
 
             renderState.location = parentFrame
         }
-
-        base.onTagEnd(tag)
     }
+
+    private fun Tag.isShadeDirective() = tagName.equals("script", ignoreCase = true) && attributes["type"] == scriptTypeSignifier
 }
 
 /**

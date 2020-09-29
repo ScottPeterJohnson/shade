@@ -4,6 +4,8 @@ import kotlinx.html.HtmlBlockTag
 import kotlinx.html.INPUT
 import kotlinx.html.InputType
 import kotlinx.html.input
+import net.justmachinery.shade.AttributeNames
+import net.justmachinery.shade.SocketScopeNames
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.component.MountingContext
 import net.justmachinery.shade.component.PropsType
@@ -33,7 +35,7 @@ class BoundCheckbox : Component<BoundCheckbox.Props>(){
             checkChange.reportObserved()
             val value = props.bound.get()
             if(value != lastKnownInput){
-                client.executeScript("c($bindingId,$serverSeen,${if(value) "1" else "0"})")
+                client.executeScript("${SocketScopeNames.updateBoundCheckbox.raw}($bindingId,$serverSeen,${if(value) "1" else "0"})")
             }
             lastKnownInput = null
         }
@@ -41,7 +43,7 @@ class BoundCheckbox : Component<BoundCheckbox.Props>(){
     override fun HtmlBlockTag.render() {
         input {
             type = InputType.checkBox
-            attributes["shade-checkbox"] = bindingId.toString()
+            attributes[AttributeNames.Checkbox.raw] = bindingId.toString()
             onChange(prefix = "it.boundSeen+=1", data = "it.checked") {
                 serverSeen += 1
                 val checked = it!!.raw == "true"

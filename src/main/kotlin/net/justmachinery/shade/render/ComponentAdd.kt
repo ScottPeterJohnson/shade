@@ -1,12 +1,12 @@
 package net.justmachinery.shade.render
 
-import kotlinx.html.SCRIPT
 import kotlinx.html.Tag
-import kotlinx.html.visit
+import net.justmachinery.shade.DirectiveType
 import net.justmachinery.shade.component.*
+import net.justmachinery.shade.componentIdPrefix
 import net.justmachinery.shade.contextInRenderingThread
 import net.justmachinery.shade.utility.RenderFunction
-import net.justmachinery.shade.utility.eql
+import net.justmachinery.shade.utility.eqL
 import kotlin.reflect.KClass
 
 interface ComponentAdd : ComponentBase {
@@ -44,13 +44,14 @@ interface ComponentAdd : ComponentBase {
      * Note that the component context captured from the render function passed in will be wrong, but is hackily fixed
      * for shade functions like e.g. onChange.
      */
-    fun <RenderIn : Tag> RenderIn.render(cb : RenderFunction<RenderIn>){
+    fun <RenderIn : Tag> RenderIn.render(key : String? = null, cb : RenderFunction<RenderIn>){
         @Suppress("UNCHECKED_CAST")
         add(
             FunctionComponent::class as KClass<FunctionComponent<RenderIn>>,
             FunctionComponent.Props(
-                cb = cb.eql
-            )
+                cb = cb.eqL
+            ),
+            key = key
         )
     }
 }
@@ -73,12 +74,11 @@ private fun <T : Any, RenderIn : Tag> addComponent(
             }
         }
         GetComponentResult.EXISTING_KEEP -> {
-            SCRIPT(listOfNotNull(
-                "type" to "shade",
-                "id" to "shade"+comp.renderState.componentId.toString(),
-                "data-shade-keep" to "true",
-                comp.key?.let { "data-key" to it }
-            ).toMap(), block.consumer).visit {}
+            block.scriptDirective(
+                type = DirectiveType.ComponentKeep,
+                id = componentIdPrefix + comp.renderState.componentId.toString(),
+                key = comp.key
+            )
         }
     }
 

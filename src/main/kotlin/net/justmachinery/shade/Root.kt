@@ -1,17 +1,16 @@
 package net.justmachinery.shade
 
-import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.html.HtmlBlockTag
-import kotlinx.html.Tag
-import kotlinx.html.script
-import kotlinx.html.unsafe
+import kotlinx.html.*
 import mu.KLogging
 import net.justmachinery.shade.component.*
+import net.justmachinery.shade.render.shadeToString
+import net.justmachinery.shade.render.shadeToWriter
 import net.justmachinery.shade.utility.*
+import java.io.Writer
 import java.time.Duration
 import java.util.*
 import kotlin.coroutines.CoroutineContext
@@ -51,12 +50,20 @@ class ShadeRoot(
      */
     val context : CoroutineContext = Dispatchers.Default,
 
-    //Maximum acceptable delay between a client loading a page and connecting back via websocket before its data is removed
-    //(and it has to reload the page if it wants to add interactivity)
-    val maximumAcceptableConnectionDelay : Duration = Duration.ofSeconds(30)
+    /**
+     * Maximum acceptable delay between a client loading a page and connecting back via websocket before its data is removed
+     * (and it has to reload the page if it wants to add interactivity)
+     */
+    val maximumAcceptableConnectionDelay : Duration = Duration.ofSeconds(30),
+
+    /**
+     * For adding the Shade client script, it can be either added as an inline script at first render or as a script with a given path.
+     */
+    val addScriptStrategy: AddScriptStrategy = AddScriptStrategy.Inline(production = true)
 ) {
     companion object : KLogging() {
-        private val shadeScript = ClassLoader.getSystemClassLoader().getResource("shade.js")!!.readText()
+        val shadeDevScript by lazy { ClassLoader.getSystemClassLoader().getResource("js/shade-bundle.js")!!.readText() }
+        val shadeProdScript by lazy { ClassLoader.getSystemClassLoader().getResource("js/shade-bundle-min.js")!!.readText() }
     }
 
     internal fun <T : Any, RenderIn : Tag> constructComponent(clazz : KClass<out AdvancedComponent<T, RenderIn>>, props : ComponentInitData<T>) : AdvancedComponent<T, RenderIn> {
@@ -83,25 +90,31 @@ class ShadeRoot(
     }
 
     /**
-     * Installs the Shade framework and begins rendering within cb()
+     * Installs the Shade framework and begins rendering within cb(), returning output as a String
      */
-    fun render(tag : HtmlBlockTag, cb : (ShadeRootComponent.()->Unit)){
-        installFramework(tag){client ->
-            renderComponentAsRoot(client, tag, cb.eql)
+    fun render(cb : (ShadeRootComponent.()->Unit)) : String {
+        val consumer = shadeToString()
+        return renderImpl(consumer, cb)
+    }
+    /**
+     * As [render] but writes output to [writer]
+     */
+    fun render(writer: Writer, cb : (ShadeRootComponent.()->Unit)) {
+        val consumer = shadeToWriter(writer)
+        return renderImpl(consumer, cb)
+    }
+
+    private fun <T> renderImpl(consumer: TagConsumer<T>, cb : (ShadeRootComponent.()->Unit)) : T {
+        consumer.onTagContentUnsafe { +"<!doctype html>" }
+        return consumer.html {
+            val client = createClient()
+            renderComponentAsRoot(client, this, cb.eqL)
         }
     }
 
-    /**
-     * As render, but does not create a new client (and can be used multiple times on a page)
-     */
-    fun renderWithClient(client: Client, tag : HtmlBlockTag, cb : (ShadeRootComponent.()->Unit)){
-        renderComponentAsRoot(client, tag, cb.eql)
-    }
-
-
     private fun renderComponentAsRoot(
         client : Client,
-        builder : HtmlBlockTag,
+        builder : HTML,
         cb : EqLambda<ShadeRootComponent.()->Unit>
     ){
         val propObj = ComponentInitData(
@@ -117,10 +130,10 @@ class ShadeRoot(
     }
 
     /**
-     * Just installs the framework into an HTML builder, creating a new client object.
+     * Just creates a new client.
      * You probably don't want to use this directly.
      */
-    fun installFramework(tag : HtmlBlockTag, cb : (Client)-> Unit){
+    fun createClient() : Client {
         val id = UUID.randomUUID()
 
         val client = Client(id, this)
@@ -137,25 +150,15 @@ class ShadeRoot(
         withLoggingInfo("shadeClientId" to id.toString()){
             logger.info { "Created new client id" }
         }
-        tag.run {
-            script {
-                async = true
-                unsafe {
-                    //language=JavaScript 1.8
-                    raw(
-                        """
-                            window.shadeEndpoint = "$endpoint";
-                            window.shadeHost = ${if(host != null) "\"$host\"" else "null"};
-                            window.shadeId = "$id";
-                            $shadeScript
-                        """
-                    )
-                }
-            }
-        }
-        cb(client)
+
+        return client
     }
 
+    /**
+     * Creates a handler.
+     * [send] should send data to the client over websocket, and [disconnect] should be called when the client disconnects
+     * You should take care of calling [MessageHandler.onMessage] and [MessageHandler.onDisconnect]
+     */
     fun handler(send : (String)->Unit, disconnect : ()->Unit) = MessageHandler(send, disconnect)
 
     private val clientDataMap = Collections.synchronizedMap(mutableMapOf<UUID, Client>())
@@ -215,7 +218,7 @@ class ShadeRoot(
                         }
                     } else {
                         val (tag, data) = message.split('|', limit = 2)
-                        val error by lazy { JavascriptException(Gson().fromJson(data, JavascriptExceptionDetails::class.java)) }
+                        val error by lazy { JavascriptException(gson.fromJson(data, JavascriptExceptionDetails::class.java)) }
                         if(tag == "E"){ //Global caught error
                             try { onUncaughtJavascriptException(clientData!!, error) } catch(t : Throwable){
                                 logger.error(t) { "While handling uncaught global JavaScript error" }
@@ -248,8 +251,69 @@ class ShadeRoot(
     }
 }
 
-class ShadeRootComponent : Component<EqLambda<ShadeRootComponent.() -> Unit>>() {
-    override fun HtmlBlockTag.render() {
-        props.raw(this@ShadeRootComponent)
+sealed class AddScriptStrategy {
+    data class Inline(val production : Boolean) : AddScriptStrategy()
+    data class AtPath(val path : String) : AddScriptStrategy()
+}
+
+class ShadeRootComponent : ComponentInTag<EqLambda<ShadeRootComponent.() -> Unit>, HTML>() {
+    private class RenderingData {
+        val headCbs = ArrayList<HEAD.()->Unit>(1)
+        val bodyCbs = ArrayList<BODY.()->Unit>(1)
+    }
+    private var rendering : RenderingData? = null
+    override fun HTML.render() {
+        try {
+            val render = RenderingData()
+            rendering = render
+            props.raw(this@ShadeRootComponent)
+            head {
+                meta(charset = "UTF-8") {  }
+                addShadeScript()
+                render.headCbs.forEach { it() }
+            }
+            body {
+                render.bodyCbs.forEach { it() }
+            }
+        } finally {
+            rendering = null
+        }
+    }
+
+    private fun HEAD.addShadeScript(){
+        script {
+            unsafe {
+                //language=JavaScript 1.8
+                raw(
+                    """
+                            window.shadeEndpoint = "${client.root.endpoint}";
+                            window.shadeHost = ${if (client.root.host != null) "\"${client.root.host}\"" else "null"};
+                            window.shadeId = "${client.clientId}";
+                        """
+                )
+            }
+        }
+        when(val strat = client.root.addScriptStrategy){
+            is AddScriptStrategy.Inline -> {
+                script {
+                    async = true
+                    unsafe {
+                        raw(if(strat.production) ShadeRoot.shadeProdScript else ShadeRoot.shadeDevScript)
+                    }
+                }
+            }
+            is AddScriptStrategy.AtPath -> {
+                script(src = strat.path){
+                    async = true
+                }
+            }
+        }
+
+    }
+    fun head(cb : HEAD.()->Unit){
+        rendering!!.headCbs.add(cb)
+    }
+    fun body(cb : BODY.()->Unit){
+        rendering!!.bodyCbs.add(cb)
     }
 }

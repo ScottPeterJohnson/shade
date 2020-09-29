@@ -1,12 +1,14 @@
 package net.justmachinery.shade.components
 
-import com.google.gson.Gson
 import kotlinx.html.*
+import net.justmachinery.shade.AttributeNames
+import net.justmachinery.shade.SocketScopeNames
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.component.MountingContext
 import net.justmachinery.shade.state.Atom
 import net.justmachinery.shade.utility.EqLambda
 import net.justmachinery.shade.utility.GetSet
+import net.justmachinery.shade.utility.gson
 import java.util.concurrent.atomic.AtomicInteger
 
 class BoundInput<T> : BoundTag<T, INPUT>() {
@@ -47,14 +49,14 @@ abstract class BoundTag<T, Tag : CommonAttributeGroupFacade> : Component<BoundTa
             checkChange.reportObserved()
             val value = props.toString.raw(props.bound.get())
             if(value != lastKnownInput){
-                client.executeScript("b($bindingId,$serverSeen,${Gson().toJson(value)})")
+                client.executeScript("${SocketScopeNames.updateBoundInput.raw}($bindingId,$serverSeen,${gson.toJson(value)})")
             }
             lastKnownInput = null
         }
     }
     override fun HtmlBlockTag.render() {
         tag {
-            this.attributes["shade-bound"] = bindingId.toString()
+            this.attributes[AttributeNames.Bound.raw] = bindingId.toString()
             this.onValueInput(prefix = "it.boundSeen+=1") {
                 serverSeen += 1
                 lastKnownInput = it

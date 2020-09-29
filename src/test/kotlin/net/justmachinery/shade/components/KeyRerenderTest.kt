@@ -1,9 +1,10 @@
-package net.justmachinery.shade
+package net.justmachinery.shade.components
 
 import kotlinx.css.Display
 import kotlinx.css.display
 import kotlinx.html.*
 import net.justmachinery.shade.component.Component
+import net.justmachinery.shade.newBackgroundColorOnRerender
 import net.justmachinery.shade.state.obs
 import net.justmachinery.shade.utility.key
 import net.justmachinery.shade.utility.withStyle

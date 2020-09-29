@@ -3,8 +3,8 @@ package net.justmachinery.shade.utility
 import org.apache.commons.lang3.builder.HashCodeBuilder
 import java.lang.reflect.AccessibleObject
 
-val <T : Function<*>> T.eql get() = EqLambda(this)
-fun <T : Function<*>> T.eql() = EqLambda(this)
+fun <T : Function<*>> eqL(cb : T) = EqLambda(cb)
+val <T : Function<*>> T.eqL get() = EqLambda(this)
 /**
  * A lambda wrapper with equality based on code site (generated class) and captured variables.
  */

@@ -1,8 +1,8 @@
 package net.justmachinery.shade.routing.base
 
-import com.google.gson.Gson
 import net.justmachinery.shade.Client
 import net.justmachinery.shade.GlobalClientStateIdentifier
+import net.justmachinery.shade.utility.gson
 
 val routingGlobalClientStateIdentifier = GlobalClientStateIdentifier<RoutingGlobalClientState>()
 
@@ -21,7 +21,7 @@ private fun installRoutingHandler(client: Client, urlTransform: (ExternalUrlInfo
         "window.addEventListener('popstate', (event)=>{ window.shade($it, JSON.stringify({path:''+document.location.pathname, query:''+document.location.search}))})"
     }){
         it?.let {
-            val newUrl = Gson().fromJson(it.raw, PathAndQueryParam::class.java)
+            val newUrl = gson.fromJson(it.raw, PathAndQueryParam::class.java)
             val newInfo = urlTransform(
                 UrlInfo.of(
                     newUrl.path,

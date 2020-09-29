@@ -3,15 +3,16 @@ package net.justmachinery.shade.render
 import com.google.common.collect.BiMap
 import com.google.common.collect.HashBiMap
 import com.google.common.collect.Sets
-import com.google.gson.Gson
-import kotlinx.html.*
-import kotlinx.html.stream.appendHTML
+import kotlinx.html.HTML
+import kotlinx.html.Tag
+import kotlinx.html.TagConsumer
 import net.justmachinery.shade.*
 import net.justmachinery.shade.component.AdvancedComponent
 import net.justmachinery.shade.component.doMount
 import net.justmachinery.shade.state.ChangeBatchChangePolicy
 import net.justmachinery.shade.state.runChangeBatch
 import net.justmachinery.shade.utility.applyWrappers
+import net.justmachinery.shade.utility.gson
 import net.justmachinery.shade.utility.withValue
 import java.io.ByteArrayOutputStream
 import java.util.*
@@ -70,9 +71,9 @@ internal data class ComponentRenderState(
     //Allows for callback ID reuse for the same event in the same place in the render tree, which allows for delay compensation
     var renderTreePathToCallbackId : BiMap<Pair<RenderTreeTagLocation, String>, Long> = HashBiMap.create(0)
 )
-internal fun ShadeRootComponent.renderRoot(tag : HtmlBlockTag){
+internal fun ShadeRootComponent.renderRoot(tag : HTML){
     runRenderBatch {
-        renderInternal(this, tag, true)
+        renderInternal(this, tag, false)
     }
 }
 
@@ -91,10 +92,11 @@ internal fun rerender(client: Client, components : List<AdvancedComponent<*,*> >
 private fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.updateRender(){
     val html = ByteArrayOutputStream().let { baos ->
         baos.writer().buffered().use {
-            val consumer = it.appendHTML(prettyPrint = false)
+            val consumer = shadeToWriter(it)
             val tag = renderIn.java.getDeclaredConstructor(Map::class.java, TagConsumer::class.java)
                 .also { it.isAccessible = true }
                 .newInstance(emptyMap<String,String>(), consumer)
+            consumer.shade.containerTag = tag
             @Suppress("UNCHECKED_CAST")
             renderInternal(this, tag as RenderIn, addMarkers = false)
             consumer.finalize()
@@ -103,8 +105,8 @@ private fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.updateRender(){
     }
 
 
-    val escapedHtml = Gson().toJson(html)
-    client.executeScript("r(${renderState.componentId},$escapedHtml);")
+    val escapedHtml = gson.toJson(html)
+    client.executeScript("${SocketScopeNames.reconcile.raw}(${renderState.componentId},$escapedHtml);")
 }
 
 internal fun <RenderIn : Tag> renderInternal(
@@ -117,11 +119,11 @@ internal fun <RenderIn : Tag> renderInternal(
     renderState.lastRenderCallbackIds = TreeSet()
     markDontRerender(component)
     if(addMarkers) {
-        SCRIPT(listOfNotNull(
-            "type" to "shade",
-            "id" to "shade"+renderState.componentId.toString(),
-            component.key?.let { "data-key" to it }
-        ).toMap(), tag.consumer).visit {}
+        tag.scriptDirective(
+            type = DirectiveType.ComponentStart,
+            id = componentIdPrefix + renderState.componentId.toString(),
+            key = component.key
+        )
     }
 
     try {
@@ -137,10 +139,10 @@ internal fun <RenderIn : Tag> renderInternal(
         }
     } finally {
         if(addMarkers) {
-            SCRIPT(mapOf(
-                "type" to "shade",
-                "id" to "shade"+renderState.componentId.toString() + "e"
-            ), tag.consumer).visit {}
+            tag.scriptDirective(
+                type = DirectiveType.ComponentEnd,
+                id = componentIdPrefix + renderState.componentId.toString() + componentIdEndSuffix
+            )
         }
 
         Sets.difference(oldRenderCallbackIds, renderState.lastRenderCallbackIds).forEach {

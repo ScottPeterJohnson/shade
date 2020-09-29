@@ -6,7 +6,7 @@ import net.justmachinery.shade.component.AdvancedComponent
 import net.justmachinery.shade.currentContext
 import net.justmachinery.shade.state.ChangeBatchChangePolicy
 import net.justmachinery.shade.state.runChangeBatch
-import net.justmachinery.shade.utility.eql
+import net.justmachinery.shade.utility.eqL
 import kotlin.reflect.KClass
 
 internal fun <RenderIn : Tag> RenderIn.startRoutingInternal(
@@ -45,7 +45,7 @@ private fun <RenderIn : Tag> RenderIn.doRouting(
     component.run {
         add(
             component = RoutingComponent::class as KClass<RoutingComponent<RenderIn>>,
-            props = RoutingComponent.Props(cb = cb.eql)
+            props = RoutingComponent.Props(cb = cb.eqL)
         )
     }
 }

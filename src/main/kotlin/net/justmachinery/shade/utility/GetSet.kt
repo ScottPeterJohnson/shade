@@ -5,7 +5,7 @@ import kotlin.reflect.KProperty0
 
 interface Get<T> {
     companion object {
-        fun <T> of(cb : ()->T) : Get<T> = LambdaGetter(EqLambda(cb))
+        fun <T> of(cb : ()->T) : Get<T> = LambdaGetter(cb.eqL)
     }
     fun get() : T
 }
@@ -16,7 +16,7 @@ private data class LambdaGetter<T>(val lambda: EqLambda<()->T>) : Get<T> {
 
 interface Set<T> {
     companion object {
-        fun <T> of(cb : (T)->Unit) : Set<T> = LambdaSetter(EqLambda(cb))
+        fun <T> of(cb : (T)->Unit) : Set<T> = LambdaSetter(cb.eqL)
     }
     fun set(value : T)
 }
@@ -28,7 +28,7 @@ private data class LambdaSetter<T>(val lambda: EqLambda<(T)->Unit>) : Set<T> {
 
 interface GetSet<T> : Get<T>, Set<T> {
     companion object {
-        fun <T> of(getter : ()->T, setter : (T)->Unit) : GetSet<T> = LambdaGetterSetter(EqLambda(getter), EqLambda(setter))
+        fun <T> of(getter : ()->T, setter : (T)->Unit) : GetSet<T> = LambdaGetterSetter(getter.eqL, setter.eqL)
     }
 }
 
@@ -51,3 +51,9 @@ private data class MutablePropertyGetter<T>(val property : KMutableProperty0<T>)
         property.set(value)
     }
 }
+
+fun <From, To> Get<From>.map(to : (From)->To) : Get<To> = Get.of { to(get()) }
+fun <From, To> GetSet<From>.map(to : (From)->To, from : (To)->From) : GetSet<To> = GetSet.of(
+    getter = { to(get()) },
+    setter = { set(from(it)) }
+)

@@ -1,11 +1,15 @@
 package net.justmachinery.shade.utility
 
+import com.google.gson.GsonBuilder
 import kotlinx.coroutines.Job
 import kotlinx.css.CSSBuilder
 import kotlinx.html.CommonAttributeGroupFacade
 import kotlinx.html.HtmlBlockTag
 import kotlinx.html.HtmlTagMarker
 import kotlinx.html.style
+import net.justmachinery.shade.AttributeNames
+import net.justmachinery.shade.DirectiveType
+import net.justmachinery.shade.render.scriptDirective
 import org.intellij.lang.annotations.Language
 import org.slf4j.MDC
 
@@ -37,12 +41,12 @@ internal inline fun <T> withLoggingInfo(vararg pair: Pair<String, String>, body:
 internal fun String.ellipsizeAfter(maxLength : Int) = if(this.length > maxLength) this.take(maxLength) + "..." else this
 
 var HtmlBlockTag.key : String?
-    get() = attributes["data-key"]
+    get() = attributes[AttributeNames.Key.raw]
     set(it) {
         if(it != null){
-            attributes["data-key"] = it
+            attributes[AttributeNames.Key.raw] = it
         } else {
-            attributes.remove("data-key")
+            attributes.remove(AttributeNames.Key.raw)
         }
     }
 
@@ -55,7 +59,13 @@ fun HtmlBlockTag.applyJs(
     @Language("JavaScript 1.8", prefix = "const it = document.createElement('div'); ") js : String,
     onlyOnCreate : Boolean = false
 ){
-    attributes["data-shade-element-js"] = "${if(onlyOnCreate) 'R' else 'A'}$js"
+    scriptDirective(
+        type = DirectiveType.ApplyJs,
+        data = listOf(
+            AttributeNames.ApplyJsRunOption to (if(onlyOnCreate) "1" else "0"),
+            AttributeNames.ApplyJsScript to js
+        )
+    )
 }
 
 data class Json(val raw : String)
@@ -174,3 +184,5 @@ inline fun <T,R> ThreadLocal<T>.withValue(value : T, cb: ()->R) : R {
         set(oldValue)
     }
 }
+
+internal val gson = GsonBuilder().disableHtmlEscaping().create()

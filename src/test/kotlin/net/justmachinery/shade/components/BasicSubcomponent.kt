@@ -1,10 +1,12 @@
 package net.justmachinery.shade.components
 
+import kotlinx.css.Color
+import kotlinx.css.backgroundColor
 import kotlinx.html.HtmlBlockTag
 import kotlinx.html.div
 import kotlinx.html.h2
 import net.justmachinery.shade.component.Component
-import net.justmachinery.shade.newBackgroundColorOnRerender
+import net.justmachinery.shade.utility.withStyle
 
 class BasicSubcomponent : Component<Unit>() {
     override fun HtmlBlockTag.render() {
@@ -23,7 +25,11 @@ class BasicSubcomponent : Component<Unit>() {
 class SubComponent : Component<Unit>() {
     override fun HtmlBlockTag.render() {
         div {
-            newBackgroundColorOnRerender()
+            render {
+                withStyle {
+                    backgroundColor = Color.aliceBlue
+                }
+            }
             +"This text was rendered in a sub component."
         }
     }

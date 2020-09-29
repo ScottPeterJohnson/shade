@@ -2,7 +2,7 @@ package net.justmachinery.shade
 
 import kotlinx.coroutines.*
 import kotlinx.coroutines.slf4j.MDCContext
-import kotlinx.html.HtmlBlockTag
+import kotlinx.html.HTML
 import mu.KLogging
 import net.justmachinery.shade.component.AdvancedComponent
 import net.justmachinery.shade.component.doUnmount
@@ -57,7 +57,7 @@ class Client(
     /**
      * Render a root component into an existing HTML builder.
      */
-    internal fun renderRoot(builder : HtmlBlockTag, component : ShadeRootComponent) = logging {
+    internal fun renderRoot(builder : HTML, component : ShadeRootComponent) = logging {
         logger.debug { "Rendering root $component" }
         renderLock.runSync {
             rootComponents.add(component)
@@ -301,15 +301,12 @@ class Client(
         }
     }
 
-    internal fun eventCallbackStringInternal(
-        @Language("JavaScript 1.8") prefix : String = "",
-        @Language("JavaScript 1.8") suffix : String = "",
-        @Language("JavaScript 1.8") data : String?,
+    internal fun eventCallbackId(
         forceId: Long?,
         errorHandler: ContextErrorHandler?,
         cb : suspend (Json?)->Unit
-    ) : Pair<Long, String> {
-        val id = storeCallback(
+    ) : Long {
+        return storeCallback(
             CallbackData(
                 callback = cb,
                 errorHandler = errorHandler,
@@ -317,10 +314,6 @@ class Client(
             ),
             forceId = forceId
         )
-        val wrappedPrefix = if(prefix.isNotBlank()) "$prefix;" else ""
-        val wrappedSuffix = if(suffix.isNotBlank()) ";$suffix" else ""
-        val wrappedData = if(data != null) ",JSON.stringify($data)" else ""
-        return id to "javascript:(function(){ let it=event.srcElement;${wrappedPrefix}window.shade($id$wrappedData)$wrappedSuffix })()"
     }
 
     fun executeScript(@Language("JavaScript 1.8") js : String) {
@@ -362,7 +355,7 @@ class Client(
      */
     fun runExpression(
         @Language("JavaScript 1.8", prefix = "var result = ", suffix = ";") js : String) : CompletableDeferred<Json> {
-        return runOneoffExpressionWithTemplate { id -> "var result = $js;\nwindow.shade($id, JSON.stringify(result))" }
+        return runOneoffExpressionWithTemplate { id -> "var result = $js;\n${SocketScopeNames.sendMessage.raw}($id, JSON.stringify(result))" }
     }
 
     /**
@@ -370,7 +363,7 @@ class Client(
      * Call shadeCb(data) to return data, or shadeErr(error) to throw an exception.
      */
     fun runWithCallback(@Language("JavaScript 1.8", prefix = "function cb(data){}; ", suffix = ";") js : String) : CompletableDeferred<Json> {
-        return runOneoffExpressionWithTemplate { id -> "(function(){ function shadeErr(e){ sendIfError(e, $id, script.substring(0,256)) }; function shadeCb(data){ window.shade($id, JSON.stringify(data)) }; $js; })()" }
+        return runOneoffExpressionWithTemplate { id -> "(function(){ function shadeErr(e){ ${SocketScopeNames.sendIfError.raw}(e, $id, script.substring(0,256)) }; function shadeCb(data){ ${SocketScopeNames.sendMessage.raw}($id, JSON.stringify(data)) }; $js; })()" }
     }
 
     /**

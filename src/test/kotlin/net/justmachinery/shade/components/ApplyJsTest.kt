@@ -1,4 +1,4 @@
-package net.justmachinery.shade
+package net.justmachinery.shade.components
 
 import kotlinx.html.HtmlBlockTag
 import kotlinx.html.div
