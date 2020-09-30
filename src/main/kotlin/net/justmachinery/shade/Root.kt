@@ -92,19 +92,19 @@ class ShadeRoot(
     /**
      * Installs the Shade framework and begins rendering within cb(), returning output as a String
      */
-    fun render(cb : (ShadeRootComponent.()->Unit)) : String {
+    fun render(cb : (ShadeRootRender.()->Unit)) : String {
         val consumer = shadeToString()
         return renderImpl(consumer, cb)
     }
     /**
      * As [render] but writes output to [writer]
      */
-    fun render(writer: Writer, cb : (ShadeRootComponent.()->Unit)) {
+    fun render(writer: Writer, cb : (ShadeRootRender.()->Unit)) {
         val consumer = shadeToWriter(writer)
         return renderImpl(consumer, cb)
     }
 
-    private fun <T> renderImpl(consumer: TagConsumer<T>, cb : (ShadeRootComponent.()->Unit)) : T {
+    private fun <T> renderImpl(consumer: TagConsumer<T>, cb : (ShadeRootRender.()->Unit)) : T {
         consumer.onTagContentUnsafe { +"<!doctype html>" }
         return consumer.html {
             val client = createClient()
@@ -115,7 +115,7 @@ class ShadeRoot(
     private fun renderComponentAsRoot(
         client : Client,
         builder : HTML,
-        cb : EqLambda<ShadeRootComponent.()->Unit>
+        cb : EqLambda<ShadeRootRender.()->Unit>
     ){
         val propObj = ComponentInitData(
             client = client,
@@ -256,10 +256,15 @@ sealed class AddScriptStrategy {
     data class AtPath(val path : String) : AddScriptStrategy()
 }
 
-class ShadeRootComponent : ComponentInTag<EqLambda<ShadeRootComponent.() -> Unit>, HTML>() {
+interface ShadeRootRender {
+    fun head(cb : ShadeRootComponent.(HEAD)->Unit)
+    fun body(cb : ShadeRootComponent.(BODY)->Unit)
+}
+
+class ShadeRootComponent : ComponentInTag<EqLambda<ShadeRootRender.() -> Unit>, HTML>(), ShadeRootRender {
     private class RenderingData {
-        val headCbs = ArrayList<HEAD.()->Unit>(1)
-        val bodyCbs = ArrayList<BODY.()->Unit>(1)
+        val headCbs = ArrayList<ShadeRootComponent.(HEAD)->Unit>(1)
+        val bodyCbs = ArrayList<ShadeRootComponent.(BODY)->Unit>(1)
     }
     private var rendering : RenderingData? = null
     override fun HTML.render() {
@@ -270,10 +275,10 @@ class ShadeRootComponent : ComponentInTag<EqLambda<ShadeRootComponent.() -> Unit
             head {
                 meta(charset = "UTF-8") {  }
                 addShadeScript()
-                render.headCbs.forEach { it() }
+                render.headCbs.forEach { it(this) }
             }
             body {
-                render.bodyCbs.forEach { it() }
+                render.bodyCbs.forEach { it(this) }
             }
         } finally {
             rendering = null
@@ -310,10 +315,10 @@ class ShadeRootComponent : ComponentInTag<EqLambda<ShadeRootComponent.() -> Unit
         }
 
     }
-    fun head(cb : HEAD.()->Unit){
+    override fun head(cb : ShadeRootComponent.(HEAD)->Unit){
         rendering!!.headCbs.add(cb)
     }
-    fun body(cb : BODY.()->Unit){
+    override fun body(cb : ShadeRootComponent.(BODY)->Unit){
         rendering!!.bodyCbs.add(cb)
     }
 }

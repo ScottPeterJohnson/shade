@@ -35,15 +35,18 @@ fun main(){
             //Let's throw some shade:
             root.render(response.raw().writer) {
                 head {}
-                body {
-                    h2 {
-                        +"Shade test page"
+                body { tag ->
+                    //Adding this line is convenient because Kotlin does not yet allow multiple receivers on a lambda
+                    tag.run {
+                        h2 {
+                            +"Shade test page"
+                        }
+                        //Look at RootComponent for a more in-depth overview of how to render with shade
+                        add(RootComponent::class, UrlInfo.of(
+                            request.pathInfo(),
+                            request.queryString()
+                        ))
                     }
-                    //Look at RootComponent for a more in-depth overview of how to render with shade
-                    add(RootComponent::class, UrlInfo.of(
-                        request.pathInfo(),
-                        request.queryString()
-                    ))
                 }
             }
         }
