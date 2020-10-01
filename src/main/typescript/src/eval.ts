@@ -20,7 +20,7 @@ export function makeEvalScope(scope : Object) : Scope {
     }
     const baseScript = base.join("\n") + "\n"
     return function (script : string) {
-        eval(baseScript + script);
+        eval("(function(){\n" + baseScript + script + "\n})()");
     }
 }
 

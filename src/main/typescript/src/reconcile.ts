@@ -15,10 +15,10 @@ export function reconcile(targetId : number, html : string){
     changingAttributeDirectives(()=>{
         const target = document.getElementById(componentIdPrefix+targetId);
         if(!target){ return }
-        const htmlDom = document.createElement('div');
+        const parent = target.parentElement!!
+        const htmlDom = document.createElement(parent.tagName);
         htmlDom.innerHTML = html;
 
-        const parent = target.parentElement!!
 
         const included = [];
         let current = target.nextSibling;

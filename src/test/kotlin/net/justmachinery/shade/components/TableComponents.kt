@@ -4,6 +4,7 @@ import kotlinx.html.*
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.component.ComponentInTag
 import net.justmachinery.shade.newBackgroundColorOnRerender
+import net.justmachinery.shade.state.Atom
 
 class TableComponents : Component<Unit>(){
     override fun HtmlBlockTag.render() {
@@ -20,7 +21,9 @@ class TableComponents : Component<Unit>(){
 }
 
 class TableRowComponent : ComponentInTag<Int, TBODY>() {
+    val rerender = Atom()
     override fun TBODY.render() {
+        rerender.reportObserved()
         tr {
             td {
                 div {
@@ -31,6 +34,14 @@ class TableRowComponent : ComponentInTag<Int, TBODY>() {
             }
             td {
                 +"Value: $props"
+            }
+            td {
+                button {
+                    onClick {
+                        rerender.reportChanged()
+                    }
+                    +"Rerender"
+                }
             }
         }
     }
