@@ -29,6 +29,7 @@ class BoundTextArea<T> : BoundTag<T, TEXTAREA>() {
     }
 }
 
+
 abstract class BoundTag<T, Tag : CommonAttributeGroupFacade> : Component<BoundTag.Props<T, Tag>>(){
     companion object {
         private val boundId = AtomicInteger(0)
@@ -37,19 +38,41 @@ abstract class BoundTag<T, Tag : CommonAttributeGroupFacade> : Component<BoundTa
         val bound: GetSet<T>,
         val cb: EqLambda<Tag.() -> Unit>,
         val toString : EqLambda<(T) -> String>,
-        val fromString : EqLambda<(String) -> T>
+        val fromString : EqLambda<(String) -> T>,
+        /**
+         * Controls when to replace an input string with the "canonical" result of toString(fromString())
+         */
+        val normalize : Normalize
     )
+    enum class Normalize {
+        Immediately,
+        OnBlur,
+        Never
+    }
 
+    /**
+     * Used to locate the input in question without messing with the "id" attribute that clients may use
+     */
     private val bindingId = boundId.incrementAndGet()
+
+    /**
+     * Helps prevent overwriting what the user has entered based on something older that they entered.
+     */
     private var serverSeen = 0
+
     private var lastKnownInput : String? = null
     private var checkChange = Atom()
+
     override fun MountingContext.mounted() {
         react {
             checkChange.reportObserved()
-            val value = props.toString.raw(props.bound.get())
-            if(value != lastKnownInput){
-                client.executeScript("${SocketScopeNames.updateBoundInput.raw}($bindingId,$serverSeen,${gson.toJson(value)})")
+            val valueDiffers = lastKnownInput?.let { props.bound.get() != props.fromString.raw(it) } ?: true
+            val shouldNormalize by lazy {
+                props.normalize == Normalize.Immediately && props.toString.raw(props.bound.get()) != lastKnownInput
+            }
+            if(valueDiffers || shouldNormalize){
+                val asString = props.toString.raw(props.bound.get())
+                client.executeScript("${SocketScopeNames.updateBoundInput.raw}($bindingId,$serverSeen,${gson.toJson(asString)})")
             }
             lastKnownInput = null
         }
@@ -60,8 +83,14 @@ abstract class BoundTag<T, Tag : CommonAttributeGroupFacade> : Component<BoundTa
             this.onValueInput(prefix = "it.boundSeen+=1") {
                 serverSeen += 1
                 lastKnownInput = it
-                props.bound.set(props.fromString.raw(it))
+                val asValue = props.fromString.raw(it)
+                props.bound.set(asValue)
                 checkChange.reportChanged()
+            }
+            if(props.normalize == Normalize.OnBlur){
+                this.onBlur {
+                    checkChange.reportChanged()
+                }
             }
             props.cb.raw(this)
         }

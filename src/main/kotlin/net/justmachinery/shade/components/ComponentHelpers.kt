@@ -9,31 +9,51 @@ import kotlin.reflect.KClass
 
 interface ComponentHelpers : ComponentAdd {
     fun HtmlBlockTag.boundInput(bound : GetSet<String>, cb: INPUT.()->Unit){
-        boundInput(bound, {it}, {it}, cb)
+        boundInput(
+            bound = bound,
+            toString = { it },
+            fromString = { it },
+            normalize = BoundTag.Normalize.Never,
+            cb = cb
+        )
     }
     fun <T> HtmlBlockTag.boundInput(
         bound: GetSet<T>,
         toString: (T) -> String,
         fromString: (String) -> T,
+        normalize : BoundTag.Normalize = BoundTag.Normalize.OnBlur,
         cb: INPUT.() -> Unit
     ){
         @Suppress("UNCHECKED_CAST")
         add(
-            BoundInput::class as KClass<out AdvancedComponent<BoundTag.Props<T, INPUT>, HtmlBlockTag>>, BoundTag.Props(
+            component = BoundInput::class as KClass<out AdvancedComponent<BoundTag.Props<T, INPUT>, HtmlBlockTag>>,
+            props = BoundTag.Props(
                 bound = bound,
                 cb = cb.eqL,
                 toString = toString.eqL,
-                fromString = fromString.eqL
-            ))
+                fromString = fromString.eqL,
+                normalize = normalize
+            )
+        )
     }
 
-    fun HtmlBlockTag.boundTextArea(bound : GetSet<String>, cb: TEXTAREA.()->Unit){
-        boundTextArea(bound, {it}, {it}, cb)
+    fun HtmlBlockTag.boundTextArea(
+        bound: GetSet<String>,
+        cb: TEXTAREA.() -> Unit
+    ){
+        boundTextArea(
+            bound = bound,
+            toString = { it },
+            fromString = { it },
+            normalize = BoundTag.Normalize.Never,
+            cb = cb
+        )
     }
     fun <T> HtmlBlockTag.boundTextArea(
         bound: GetSet<T>,
         toString: (T) -> String,
         fromString: (String) -> T,
+        normalize: BoundTag.Normalize = BoundTag.Normalize.OnBlur,
         cb: TEXTAREA.() -> Unit
     ){
         @Suppress("UNCHECKED_CAST")
@@ -42,17 +62,24 @@ interface ComponentHelpers : ComponentAdd {
                 bound = bound,
                 cb = cb.eqL,
                 toString = toString.eqL,
-                fromString = fromString.eqL
+                fromString = fromString.eqL,
+                normalize = normalize
             ))
     }
 
     fun HtmlBlockTag.boundSelect(bound : GetSet<String>, cb: SELECT.()->Unit){
-        boundSelect(bound, {it}, {it}, cb)
+        boundSelect(
+            bound = bound,
+            toString = { it },
+            fromString = { it },
+            cb = cb
+        )
     }
     fun <T> HtmlBlockTag.boundSelect(
         bound: GetSet<T>,
         toString: (T) -> String,
         fromString: (String) -> T,
+        normalize: BoundTag.Normalize = BoundTag.Normalize.Never,
         cb: SELECT.() -> Unit
     ){
         @Suppress("UNCHECKED_CAST")
@@ -61,16 +88,22 @@ interface ComponentHelpers : ComponentAdd {
                 bound = bound,
                 cb = cb.eqL,
                 toString = toString.eqL,
-                fromString = fromString.eqL
+                fromString = fromString.eqL,
+                normalize = normalize
             ))
     }
 
 
-    fun HtmlBlockTag.intInput(bound : GetSet<Int>, cb: INPUT.()->Unit){
+    fun HtmlBlockTag.intInput(
+        bound: GetSet<Int>,
+        normalize: BoundTag.Normalize = BoundTag.Normalize.OnBlur,
+        cb: INPUT.() -> Unit
+    ){
         boundInput(
             bound = bound,
             fromString = { it.toIntOrNull() ?: 0 },
-            toString = { it.toString() }
+            toString = { it.toString() },
+            normalize = normalize
         ){
             type = InputType.number
             cb()

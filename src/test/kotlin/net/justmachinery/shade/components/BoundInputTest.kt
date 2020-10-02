@@ -10,7 +10,8 @@ import net.justmachinery.shade.utility.EqLambda
 import net.justmachinery.shade.utility.getSet
 
 class BoundInputTest : Component<Unit>() {
-    var novel by obs("")
+    var noEAllowed by obs("")
+    var allCaps by obs("")
     var checkbox by obs(false)
     enum class Selected {
         FIRST,
@@ -22,7 +23,7 @@ class BoundInputTest : Component<Unit>() {
         h2 { +"Bound input test" }
         button {
             onClick {
-                novel = ""
+                noEAllowed = ""
                 checkbox = false
                 selected = Selected.FIRST
             }
@@ -30,9 +31,19 @@ class BoundInputTest : Component<Unit>() {
         }
         p { +"A text input that does not allow the letter 'e'" }
         boundInput(
-            ::novel.getSet,
+            ::noEAllowed.getSet,
             toString = { it },
-            fromString = { it.filter { it != 'e' } }
+            fromString = { it.filter { it != 'e' } },
+            normalize = BoundTag.Normalize.Immediately
+        ){}
+        p {
+            +"A text input that converts to CAPS on blur"
+        }
+        boundInput(
+            ::allCaps.getSet,
+            toString = { it },
+            fromString = { it.toUpperCase() },
+            normalize = BoundTag.Normalize.OnBlur
         ){}
         p { +"This checkbox is ${if(checkbox) "checked" else "not checked"}" }
         boundCheckbox(::checkbox.getSet){
