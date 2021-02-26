@@ -1,6 +1,6 @@
 import {sendIfError, sendMessage} from "./socket";
 import {reconcile} from "./reconcile";
-import {updateBoundCheckbox, updateBoundInput} from "./bound";
+import {updateBoundInput} from "./bound";
 import {SocketScopeNames} from "./constants";
 
 export function evaluateScript(tag : string|undefined, scope : Scope, script : string){
@@ -21,13 +21,12 @@ export function makeEvalScope(scope : Object) : Scope {
     const baseScript = base.join("\n") + "\n"
     return function (script : string) {
         eval("(function(){\n" + baseScript + script + "\n})()");
-    }
+    }.bind({})
 }
 
 export const baseScope = {
     [SocketScopeNames.reconcile]:reconcile,
     [SocketScopeNames.updateBoundInput]:updateBoundInput,
-    [SocketScopeNames.updateBoundCheckbox]:updateBoundCheckbox,
     [SocketScopeNames.sendMessage]:sendMessage,
     [SocketScopeNames.sendIfError]:sendIfError
 }

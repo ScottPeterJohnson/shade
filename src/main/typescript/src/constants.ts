@@ -35,7 +35,6 @@ export const messageTagErrorPrefix = "E"
 export enum SocketScopeNames {
     reconcile = "r",
     updateBoundInput = "b",
-    updateBoundCheckbox = "c",
     sendMessage = "s",
     sendIfError = "q"
 }

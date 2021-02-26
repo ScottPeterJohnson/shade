@@ -182,7 +182,7 @@ class ShadeRoot(
         }
         /**
          * This should be called by your web framework when a websocket receives a message.
-         * Ideally, the web framework should process these messages sequentially.
+         * Ideally, the web framework should process these messages sequentially for a given websocket.
          */
         fun onMessage(message : String){
             if(message.isEmpty()) return
@@ -202,6 +202,7 @@ class ShadeRoot(
                     logger.trace { "Message received: ${message.ellipsizeAfter(200)}" }
                     if(clientData == null){
                         try {
+
                             clientId = UUID.fromString(message)!!
                         } catch(t : IllegalArgumentException){
                             logger.info { "Not a UUID: ${message.ellipsizeAfter(200)}" }

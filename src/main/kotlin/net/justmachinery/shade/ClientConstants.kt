@@ -37,7 +37,6 @@ internal const val messageTagErrorPrefix = "E"
 internal enum class SocketScopeNames(val raw : String) {
     reconcile("r"),
     updateBoundInput("b"),
-    updateBoundCheckbox("c"),
     sendMessage("s"),
     sendIfError("q")
 }

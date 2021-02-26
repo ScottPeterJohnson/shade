@@ -26,8 +26,8 @@ interface ComponentHelpers : ComponentAdd {
     ){
         @Suppress("UNCHECKED_CAST")
         add(
-            component = BoundInput::class as KClass<out AdvancedComponent<BoundTag.Props<T, INPUT>, HtmlBlockTag>>,
-            props = BoundTag.Props(
+            component = BoundInput::class as KClass<out AdvancedComponent<BoundValueTag.Props<T, INPUT>, HtmlBlockTag>>,
+            props = BoundValueTag.Props(
                 bound = bound,
                 cb = cb.eqL,
                 toString = toString.eqL,
@@ -58,7 +58,7 @@ interface ComponentHelpers : ComponentAdd {
     ){
         @Suppress("UNCHECKED_CAST")
         add(
-            BoundTextArea::class as KClass<out AdvancedComponent<BoundTag.Props<T, TEXTAREA>, HtmlBlockTag>>, BoundTag.Props(
+            BoundTextArea::class as KClass<out AdvancedComponent<BoundValueTag.Props<T, TEXTAREA>, HtmlBlockTag>>, BoundValueTag.Props(
                 bound = bound,
                 cb = cb.eqL,
                 toString = toString.eqL,
@@ -84,7 +84,7 @@ interface ComponentHelpers : ComponentAdd {
     ){
         @Suppress("UNCHECKED_CAST")
         add(
-            BoundSelect::class as KClass<out AdvancedComponent<BoundTag.Props<T, SELECT>, HtmlBlockTag>>, BoundTag.Props(
+            BoundSelect::class as KClass<out AdvancedComponent<BoundValueTag.Props<T, SELECT>, HtmlBlockTag>>, BoundValueTag.Props(
                 bound = bound,
                 cb = cb.eqL,
                 toString = toString.eqL,

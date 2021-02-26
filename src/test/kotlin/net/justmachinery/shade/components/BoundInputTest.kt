@@ -23,6 +23,7 @@ class BoundInputTest : Component<Unit>() {
         h2 { +"Bound input test" }
         button {
             onClick {
+                allCaps = ""
                 noEAllowed = ""
                 checkbox = false
                 selected = Selected.FIRST

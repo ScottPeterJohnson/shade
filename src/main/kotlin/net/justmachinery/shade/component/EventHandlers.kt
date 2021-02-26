@@ -13,11 +13,11 @@ import net.justmachinery.shade.utility.gson
 
 interface EventHandlers : ComponentBase {
     //Event CB helpers
-    private fun Tag.addEventCallback(
+    fun Tag.addEventCallback(
         eventName : String,
-        prefix : String?,
-        suffix : String?,
-        data : String?,
+        prefix : String? = null,
+        suffix : String? = null,
+        data : String? = null,
         cb : suspend (Json?)->Unit
     ) {
         //We want to use the same callback ID for callbacks that are attached to the same event listener on the same

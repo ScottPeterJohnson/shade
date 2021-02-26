@@ -5,7 +5,9 @@ import net.justmachinery.shade.utility.withValue
 import kotlin.reflect.KProperty
 
 
-internal val observeBlock = ThreadLocal<MutableSet<Atom>>()
+internal val observeBlock = ThreadLocal<MutableSet<Atom>?>()
+
+fun ignoringChanges(cb : ()->Unit) = observeBlock.withValue(null){ cb() }
 
 sealed class ReactiveObserver {
     internal abstract val observing: MutableSet<Atom>

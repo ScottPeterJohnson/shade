@@ -76,6 +76,8 @@ class RootPageComponent : Component<Unit>(){
 
             add(AttributeSetTest::class)
 
+            add(LoadScriptTest::class)
+
             h2 { +"Demo settings" }
 
             button {

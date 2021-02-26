@@ -1,18 +1,19 @@
 //Reconcile a targetId with HTML
 import {
     asShadeDirective,
+    changingDirectives,
+    checkDirectiveAdd,
+    checkDirectiveChange,
+    checkDirectiveRemove,
     ComponentEnd,
     ComponentStart,
-    determineScriptTarget,
     Keep,
-    onAddedOrUpdated,
-    onRemoved
 } from "./directives";
 import {AttributeNames, componentIdPrefix} from "./constants";
-import {changingAttributeDirectives, onAttributesSetFromSource} from "./attributes";
+import {onAttributesSetFromSource} from "./attributes";
 
 export function reconcile(targetId : number, html : string){
-    changingAttributeDirectives(()=>{
+    changingDirectives(()=>{
         const target = document.getElementById(componentIdPrefix+targetId);
         if(!target){ return }
         const parent = target.parentElement!!
@@ -34,6 +35,9 @@ export function reconcile(targetId : number, html : string){
         patchChildren(parent, target, included, htmlDom.childNodes);
     });
 }
+
+
+
 
 interface ChildNodeListLike {
     length : number;
@@ -61,22 +65,35 @@ function asNodes(target : NodeOrComponent){
     return target instanceof Component ? target.asNodes() : [target]
 }
 
+
 function reconcileNodes(original : Node, newer : Node) : Node {
     if(original instanceof HTMLElement && newer instanceof HTMLElement){
         if(original.tagName != newer.tagName){
+            checkDirectiveAdd(newer);
+            checkDirectiveRemove(original);
             return newer;
         } else {
+            let changed = false
             for(let i=0;i<original.attributes.length;i++){
                 const attribute = original.attributes[i].name;
                 if(!newer.hasAttribute(attribute)){
                     original.removeAttribute(attribute);
+                    changed = true;
                 }
             }
             for(let i=0;i<newer.attributes.length;i++){
                 const attribute = newer.attributes[i].name;
-                original.setAttribute(attribute, newer.getAttribute(attribute)!);
+                const olderAttr = original.getAttribute(attribute);
+                const newerAttr = newer.getAttribute(attribute)!
+                if(olderAttr != newerAttr){
+                    original.setAttribute(attribute, newerAttr);
+                    changed = true;
+                }
             }
             onAttributesSetFromSource(original);
+            if(changed){
+                checkDirectiveChange(original);
+            }
             patchChildren(original, null, original.childNodes, newer.childNodes);
             return original;
         }
@@ -116,14 +133,12 @@ function patchChildren(
         if(next !== child){
             dom.insertBefore(child, next === "end" ? null : next);
         }
-        notifyAddedOrUpdated(child);
         current = child;
     }
     current = afterCurrent();
     while(current != "end" && current != endOfPatchRange){
         const child = current;
         current = afterCurrent();
-        notifyRemoved(child);
         dom.removeChild(child);
     }
 }
@@ -143,38 +158,48 @@ function reconcileChildren(
 
     const finalChildren : Node[] = [];
 
-    const keyUsed = new Set<NodeOrComponent>()
-    const keyUnused = new Set<NodeOrComponent>()
+    const keyUsed = new Set<string>()
     while(originalIndex < originals.length || replacementIndex < replacements.length){
-        const atCursor = originals[originalIndex];
-        const newer = replacements[replacementIndex];
-        if(!atCursor && newer){
-            finalChildren.push(...(asNodes(newer)));
-        } else if (atCursor && !newer) {
+        let original : NodeOrComponent|undefined = originals[originalIndex];
+        const newer : NodeOrComponent|undefined = replacements[replacementIndex];
+        //Skip any keyed originals; they will be looked up by key
+        if(original && getKey(original) != null){
+            originalIndex += 1;
+        } else if(original && !newer) {
             /* Implicit remove */
-        } else {
-            let original : NodeOrComponent = atCursor;
-
-            const newerKey = getKey(newer);
-
-            if(newerKey != null){
-                const originalByKey = originalKeys[newerKey];
-                if(originalByKey && original !== originalByKey){
-                    keyUsed.add(originalByKey);
-                    keyUnused.add(original);
-                    original = originalByKey;
-                }
+            for(let node of asNodes(original)){
+                checkDirectiveRemove(node);
             }
-            const originalKey = getKey(original)
+            originalIndex += 1;
+        } else {
+            const newerKey = getKey(newer);
+            if(newerKey != null){
+                keyUsed.add(newerKey);
+                original = originalKeys[newerKey];
+                //We'll match this unkeyed original again on something without a key
+                originalIndex -= 1;
+            }
 
             let add : Node[] = [];
 
+            function useNewer(){
+                add = asNodes(newer!);
+                for(let node of add){
+                    checkDirectiveAdd(node);
+                }
+                if(original){
+                    for(let node of asNodes(original)){
+                        checkDirectiveRemove(node);
+                    }
+                }
+            }
+
             const newerDirective = newer instanceof Component ? null : asShadeDirective(newer)
-            if(original instanceof Component && newerDirective instanceof Keep && newerDirective.id == original.id()){
+            if(original && original instanceof Component && newerDirective instanceof Keep && newerDirective.id == original.id()){
                 add = asNodes(original);
             } else {
-                if(originalKey != newerKey){
-                    add = asNodes(newer);
+                if(!original){
+                    useNewer();
                 } else {
                     if(newer instanceof Component){
                         if(original instanceof Component && original.id() == newer.id()){
@@ -184,51 +209,31 @@ function reconcileChildren(
                                 original.end
                             ]
                         } else {
-                            add = asNodes(newer);
+                            useNewer();
                         }
                     } else if(original instanceof Component){
-                        add = asNodes(newer);
+                        useNewer()
                     } else {
                         add = [reconcileNodes(original, newer)]
                     }
                 }
             }
             finalChildren.push(...add);
+            originalIndex += 1;
+            replacementIndex += 1;
         }
-        originalIndex += 1;
-        replacementIndex += 1;
     }
-    return finalChildren;
-}
 
-function notifyAddedOrUpdated(node: Node){
-    for(let child of node.childNodes){
-        notifyAddedOrUpdated(child);
-    }
-    if(node instanceof HTMLElement){
-        const directive = asShadeDirective(node)
-        if(directive){
-            onAddedOrUpdated({
-                element: node,
-                directive
-            });
+    for(const key of Object.getOwnPropertyNames(originalKeys)){
+        if(!keyUsed.has(key)){
+            const original = originalKeys[key];
+            for(let node of asNodes(original)){
+                checkDirectiveRemove(node);
+            }
         }
     }
-}
-function notifyRemoved(node : Node){
-    for(let child of node.childNodes){
-        notifyRemoved(child);
-    }
-    const directive = asShadeDirective(node);
-    if(node instanceof HTMLElement && directive){
-        const target = determineScriptTarget(node)
-        if(target){
-            onRemoved({
-                element: node,
-                directive
-            });
-        }
-    }
+
+    return finalChildren;
 }
 
 function collapseComponentChildren(list : ChildNodeListLike) : NodeOrComponent[] {

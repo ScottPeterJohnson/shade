@@ -1,4 +1,4 @@
-[ ![Download](https://api.bintray.com/packages/scottpjohnson/generic/shade/images/download.svg) ](https://bintray.com/scottpjohnson/generic/shade/_latestVersion)
+![Maven Central](https://img.shields.io/maven-central/v/net.justmachinery/shade)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 # Shade
@@ -94,13 +94,12 @@ Clone this project and run `./gradlew testServer` to play with a simple demo pag
 ## Installation
 Add the following to your Gradle build file:
 ```
-maven { url 'https://dl.bintray.com/scottpjohnson/generic/' }
 dependencies {
-    compile "net.justmachinery:shade:VERSION"
+    implementation "net.justmachinery:shade:VERSION"
 }
 ```
 
-Replace VERSION with the latest version of this repository (currently [ ![Download](https://api.bintray.com/packages/scottpjohnson/generic/shade/images/download.svg) ](https://bintray.com/scottpjohnson/generic/shade/_latestVersion))
+Replace VERSION with the latest version of this repository (currently ![Maven Central](https://img.shields.io/maven-central/v/net.justmachinery/shade))
 
 ## Contributions welcome!
 This is a highly experimental library. The core is simple enough to be functionally usable, but parts and polish may be lacking. Help us out by opening an issue or submitting a patch!

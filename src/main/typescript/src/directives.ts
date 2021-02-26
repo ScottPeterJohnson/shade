@@ -66,17 +66,9 @@ export function asShadeDirective(child : Node) : Directive|null {
 }
 
 export function addAllDirectives(base : HTMLElement) {
-    changingAttributeDirectives(()=>{
-        for(let script of querySelectorAllPlusTarget(base, `script[type=${scriptTypeSignifier}]`)){
-            const directive = asShadeDirective(script)
-            if(script instanceof HTMLElement && directive){
-                onAddedOrUpdated({
-                    element: script,
-                    directive
-                });
-            }
-        }
-    })
+    changingDirectives(()=>{
+        checkDirectiveAdd(base);
+    });
 }
 
 export function determineScriptTarget(script : HTMLElement) : HTMLElement|null {
@@ -98,10 +90,69 @@ export interface TargetInfo {
 export interface AddedTargetInfo extends TargetInfo {
     target : HTMLElement
 }
+
+let changedDirectives : TargetInfo[] = [];
+let removedDirectives : TargetInfo[] = [];
+export function changingDirectives(cb : ()=>void){
+    changingAttributeDirectives(()=>{
+        try {
+            cb()
+        } finally {
+            for(let changed of changedDirectives){
+                onAddedOrUpdated(changed);
+            }
+            for(let removed of removedDirectives){
+                onRemoved(removed);
+            }
+
+            changedDirectives = [];
+            removedDirectives = [];
+        }
+    });
+}
+
+/**
+ * Checks an element and all its children that have just been added for shade directives
+ */
+export function checkDirectiveAdd(element : Node){
+    if(element instanceof HTMLElement){
+        for(let script of querySelectorAllPlusTarget(element, `script[type=${scriptTypeSignifier}]`)){
+            const directive = asShadeDirective(script)
+            if(script instanceof HTMLElement && directive){
+                changedDirectives.push({directive, element: script});
+            }
+        }
+    }
+}
+
+/**
+ * Checks and records whether an element that changed is a script directive
+ */
+export function checkDirectiveChange(element : HTMLElement){
+    const directive = asShadeDirective(element)
+    if(directive){
+        changedDirectives.push({directive, element});
+    }
+}
+
+/**
+ * Checks an element and all its children that have just been removed for shade directives
+ */
+export function checkDirectiveRemove(element : Node){
+    if(element instanceof HTMLElement){
+        for(let script of querySelectorAllPlusTarget(element, `script[type=${scriptTypeSignifier}]`)){
+            const directive = asShadeDirective(script)
+            if(script instanceof HTMLElement && directive){
+                removedDirectives.push({directive, element: script});
+            }
+        }
+    }
+}
+
 /**
  * Called after the directive contained in element is added to target.
  */
-export function onAddedOrUpdated(info : TargetInfo) {
+function onAddedOrUpdated(info : TargetInfo) {
     const target = determineScriptTarget(info.element)
     if(target){
         const directive = info.directive;
@@ -117,7 +168,7 @@ export function onAddedOrUpdated(info : TargetInfo) {
         console.error(`Unknown target for ${info.element.outerHTML}`)
     }
 }
-export function onRemoved(info : TargetInfo){
+function onRemoved(info : TargetInfo){
     const directive = info.directive
     if(directive instanceof SetAttribute){
         noteAttributeDirectiveRemove(info.element)

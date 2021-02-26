@@ -9,7 +9,12 @@ const socketReadyQueue : string[] = [];
 let socket : WebSocket;
 
 export function connectSocket(){
-    socket = new WebSocket((window.location.protocol === "https:" ? "wss://" : "ws://") + ((window as any).shadeHost || window.location.host) + (window as any).shadeEndpoint);
+    const url = new URL((window as any).shadeEndpoint, window.location.href)
+    if((window as any).shadeHost){
+        url.host = (window as any).shadeHost;
+    }
+    url.protocol = (window.location.protocol === "https:" ? "wss://" : "ws://");
+    socket = new WebSocket(url.href);
     socket.onopen = function() {
         const id = (window as any).shadeId;
         console.log("Connected with ID " + id);
