@@ -1,12 +1,10 @@
 plugins {
-    id 'org.jetbrains.kotlin.jvm' version '1.4.30'
-    id('org.jetbrains.kotlin.kapt').version('1.4.30')
-    id "com.github.ben-manes.versions" version "0.36.0"
+    id 'org.jetbrains.kotlin.jvm' version '1.5.21'
+    id('org.jetbrains.kotlin.kapt').version('1.5.21')
+    id "com.github.ben-manes.versions" version "0.39.0"
 }
 repositories {
     mavenCentral()
-    jcenter()
-    maven { url 'https://kotlin.bintray.com/kotlin-js-wrappers' }
 }
 
 apply plugin: 'maven'
@@ -15,7 +13,7 @@ apply plugin: 'com.github.ben-manes.versions' //For finding outdated dependencie
 
 group 'net.justmachinery'
 archivesBaseName = "shade"
-version '0.5.4'
+version '0.5.5'
 
 task testServer(type: JavaExec){
     classpath = sourceSets.test.runtimeClasspath
@@ -101,24 +99,25 @@ uploadArchives {
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
-    implementation 'org.jetbrains.kotlin:kotlin-reflect:1.4.30'
+    implementation 'org.jetbrains.kotlin:kotlin-reflect:1.5.21'
 
-    api "org.jetbrains.kotlinx:kotlinx-html-jvm:0.7.2"
-    api "org.jetbrains:kotlin-css-jvm:1.0.0-pre.144-kotlin-1.4.30"
-    implementation 'com.google.code.gson:gson:2.8.6'
-    api 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.2'
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-slf4j:1.4.2'
+    api "org.jetbrains.kotlinx:kotlinx-html-jvm:0.7.3"
+    api group: 'org.jetbrains.kotlin-wrappers', name: 'kotlin-css', version: '1.0.0-pre.218-kotlin-1.5.21'
+
+    implementation 'com.google.code.gson:gson:2.8.7'
+    api 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.1'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-slf4j:1.5.1'
     implementation "org.apache.commons:commons-text:1.9"
-    implementation group: 'com.google.guava', name: 'guava', version: '30.1-jre'
+    implementation group: 'com.google.guava', name: 'guava', version: '30.1.1-jre'
     implementation group: 'org.apache.httpcomponents', name: 'httpclient', version: '4.5.13'
-    implementation 'org.jetbrains.kotlinx:kotlinx-metadata-jvm:0.2.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-metadata-jvm:0.3.0'
 
     api 'com.squareup.okio:okio:2.10.0'
 
     //Logging
     api "org.slf4j:slf4j-api:1.7.25"
-    api "io.github.microutils:kotlin-logging:2.0.4"
-    implementation "com.squareup:kotlinpoet:1.7.2"
+    api "io.github.microutils:kotlin-logging:2.0.10"
+    implementation "com.squareup:kotlinpoet:1.9.0"
     
     testCompile group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.3'
     testCompile group: 'ch.qos.logback', name: 'logback-core', version: '1.2.3'
@@ -126,5 +125,5 @@ dependencies {
 
     kaptTest project(':')
 
-    testImplementation "io.javalin:javalin:3.13.3"
+    testImplementation "io.javalin:javalin:3.13.9"
 }
