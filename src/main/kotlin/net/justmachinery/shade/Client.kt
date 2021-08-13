@@ -14,9 +14,11 @@ import net.justmachinery.shade.utility.SingleConcurrentExecution
 import net.justmachinery.shade.utility.ellipsizeAfter
 import net.justmachinery.shade.utility.withLoggingInfo
 import org.intellij.lang.annotations.Language
+import org.slf4j.MDC
 import java.util.*
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.coroutines.CoroutineContext
 
 /**
  * Stores and manages state for a particular client connection.
@@ -27,8 +29,20 @@ class Client(
      */
     val clientId : UUID,
     val root : ShadeRoot
-) {
-    companion object : KLogging()
+) : ThreadContextElement<String?> {
+    companion object : KLogging() {
+        val Key = object : CoroutineContext.Key<CoroutineName>{}
+    }
+    override val key get() = Key
+
+    override fun updateThreadContext(context: CoroutineContext): String? {
+        val oldState = MDC.get("shadeClientId")
+        MDC.put("shadeClientId", clientId.toString())
+        return oldState
+    }
+    override fun restoreThreadContext(context: CoroutineContext, oldState: String?) {
+        MDC.put("shadeClientId", oldState)
+    }
 
     private inline fun <T> logging(cb: ()->T) : T {
         return withLoggingInfo("shadeClientId" to clientId.toString()){
@@ -114,7 +128,7 @@ class Client(
     private val eventQueue : Queue<Pair<CallbackData, Json?>> = ArrayDeque()
 
     internal val supervisor = SupervisorJob()
-    internal val coroutineScope = CoroutineScope(root.context + supervisor + batchChangesUntilSuspend)
+    internal val coroutineScope = CoroutineScope(root.context + supervisor + batchChangesUntilSuspend + this)
 
     private val rootComponents = mutableListOf<AdvancedComponent<*,*>>()
     internal fun cleanup(){
