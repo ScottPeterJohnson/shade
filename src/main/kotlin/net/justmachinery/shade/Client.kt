@@ -31,7 +31,7 @@ class Client(
     val root : ShadeRoot
 ) : ThreadContextElement<String?> {
     companion object : KLogging() {
-        val Key = object : CoroutineContext.Key<CoroutineName>{}
+        val Key = object : CoroutineContext.Key<Client>{}
     }
     override val key get() = Key
 
