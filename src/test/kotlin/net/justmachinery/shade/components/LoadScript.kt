@@ -14,6 +14,13 @@ import net.justmachinery.shade.utility.*
  */
 class LoadScriptTest : Component<Unit>() {
     var phoneNumber by observable<String?>("+15555551234")
+    companion object {
+        val testStyle = LoadStyle(".style-load-test { color: red }")
+    }
+
+    override fun MountingContext.mounted() {
+        client.load(testStyle)
+    }
     override fun HtmlBlockTag.render() {
         h2 { +"Loading Scripts" }
         div {
@@ -24,6 +31,10 @@ class LoadScriptTest : Component<Unit>() {
         div {
             +"Full phone number is $phoneNumber"
         }
+        div {
+            classes = setOf("style-load-test")
+            +"This text is red-colored"
+        }
     }
 }
 
@@ -33,14 +44,6 @@ class PhoneNumberInput : Component<PhoneNumberInput.Props>() {
     companion object {
         val intlTelInputScript = LoadScript("/js/intlTelInput.js")
         val intlTelInputCss = LoadCss("/css/intlTelInput.css")
-
-        val intlTelInputStyle = LoadStyle("""
-            .iti__flag {background-image: url("/img/flags.png");}
-
-            @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
-                .iti__flag {background-image: url("/img/flags@2x.png");}
-            }
-        """.trimIndent())
     }
 
     override fun MountingContext.mounted() {

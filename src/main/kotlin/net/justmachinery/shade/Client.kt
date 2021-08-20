@@ -1,7 +1,6 @@
 package net.justmachinery.shade
 
 import kotlinx.coroutines.*
-import kotlinx.coroutines.slf4j.MDCContext
 import kotlinx.html.HTML
 import mu.KLogging
 import net.justmachinery.shade.component.AdvancedComponent
@@ -143,7 +142,7 @@ class Client(
 
     internal fun onCallbackJsError(id : Long, exception : JavascriptException) = logging {
         val callback = getCallback(id)
-        coroutineScope.launch(context = MDCContext()){
+        coroutineScope.launch {
             val onError = callback?.errorHandler
             try {
                 val handled = onError != null && onError.handleException(
@@ -206,7 +205,7 @@ class Client(
                 } else {
                     logger.trace { "Starting new processing coroutine for callback $id" }
                     isEventProcessing = true
-                    coroutineScope.launch(context = MDCContext()) {
+                    coroutineScope.launch {
                         batchingReRenders {
                             runEventLockedCallback(callback, data)
                         }
@@ -215,7 +214,7 @@ class Client(
                 Unit
             }
         } else {
-            coroutineScope.launch(context = MDCContext()) {
+            coroutineScope.launch {
                 batchingReRenders {
                     runCallbackCatchingErrors(callback, data)
                 }
