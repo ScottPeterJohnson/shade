@@ -1,6 +1,6 @@
 plugins {
-    id 'org.jetbrains.kotlin.jvm' version '1.5.21'
-    id('org.jetbrains.kotlin.kapt').version('1.5.21')
+    id 'org.jetbrains.kotlin.jvm' version '1.5.30'
+    id('org.jetbrains.kotlin.kapt').version('1.5.30')
     id "com.github.ben-manes.versions" version "0.39.0"
 }
 repositories {
@@ -13,7 +13,7 @@ apply plugin: 'com.github.ben-manes.versions' //For finding outdated dependencie
 
 group 'net.justmachinery'
 archivesBaseName = "shade"
-version '0.5.8'
+version '0.5.9'
 
 task testServer(type: JavaExec){
     classpath = sourceSets.test.runtimeClasspath
@@ -99,14 +99,14 @@ uploadArchives {
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
-    implementation 'org.jetbrains.kotlin:kotlin-reflect:1.5.21'
+    implementation 'org.jetbrains.kotlin:kotlin-reflect:1.5.30'
 
     api "org.jetbrains.kotlinx:kotlinx-html-jvm:0.7.3"
-    api group: 'org.jetbrains.kotlin-wrappers', name: 'kotlin-css', version: '1.0.0-pre.218-kotlin-1.5.21'
+    api group: 'org.jetbrains.kotlin-wrappers', name: 'kotlin-css', version: '1.0.0-pre.218-kotlin-1.5.30'
 
-    implementation 'com.google.code.gson:gson:2.8.7'
-    api 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.1'
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-slf4j:1.5.1'
+    implementation 'com.google.code.gson:gson:2.8.8'
+    api 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.2'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-slf4j:1.5.2'
     implementation "org.apache.commons:commons-text:1.9"
     implementation group: 'com.google.guava', name: 'guava', version: '30.1.1-jre'
     implementation group: 'org.apache.httpcomponents', name: 'httpclient', version: '4.5.13'
@@ -116,7 +116,7 @@ dependencies {
 
     //Logging
     api "org.slf4j:slf4j-api:1.7.25"
-    api "io.github.microutils:kotlin-logging:2.0.10"
+    api "io.github.microutils:kotlin-logging:2.0.11"
     implementation "com.squareup:kotlinpoet:1.9.0"
     
     testCompile group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.3'

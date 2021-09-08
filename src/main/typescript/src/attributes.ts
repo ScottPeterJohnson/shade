@@ -14,7 +14,11 @@ interface AttributeOriginalMap {
 }
 
 export function onAttributesSetFromSource(element : HTMLElement){
-    delete (element as OriginalAttributeValueDom)[attributeOriginalValues];
+    const originalMap = (element as OriginalAttributeValueDom)[attributeOriginalValues]
+    if(originalMap){
+        delete (element as OriginalAttributeValueDom)[attributeOriginalValues];
+        targetsWithChangedAttributeDirectives.add(element);
+    }
 }
 function noteOriginalAttribute(element : HTMLElement, name : string){
     let originals = (element as OriginalAttributeValueDom)[attributeOriginalValues];
@@ -25,6 +29,7 @@ function noteOriginalAttribute(element : HTMLElement, name : string){
         originals[name] = element.getAttribute(name);
     }
 }
+
 
 const isSetAttributeDirective = `[${AttributeNames.DirectiveType}=${DirectiveType.SetAttribute}]`;
 const baseQueryIsSetAttributeDirective = `script[type=${scriptTypeSignifier}]${isSetAttributeDirective}`;

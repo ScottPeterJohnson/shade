@@ -4,6 +4,7 @@ import kotlinx.css.Color
 import kotlinx.css.color
 import kotlinx.html.*
 import net.justmachinery.shade.component.Component
+import net.justmachinery.shade.state.Atom
 import net.justmachinery.shade.state.obs
 import net.justmachinery.shade.state.observable
 import net.justmachinery.shade.utility.getSet
@@ -17,6 +18,7 @@ class AttributeSetTest : Component<Unit>(){
     private var second by observable(false)
     private var third by observable(false)
     private var inputV by obs("Colored input")
+    private val forceRerender = Atom()
     override fun HtmlBlockTag.render() {
         h2 { +"Attribute application test" }
         label {
@@ -37,6 +39,20 @@ class AttributeSetTest : Component<Unit>(){
         }
         boundInput(::inputV.getSet){
             nestedColors()
+        }
+
+        render {
+            forceRerender.reportObserved()
+            div {
+                nestedColors()
+                +"Nested component attribute set"
+            }
+            button {
+                onClick {
+                    forceRerender.reportChanged()
+                }
+                +"Rerender outer"
+            }
         }
     }
 

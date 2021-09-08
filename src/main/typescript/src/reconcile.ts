@@ -90,8 +90,8 @@ function reconcileNodes(original : Node, newer : Node) : Node {
                     changed = true;
                 }
             }
-            onAttributesSetFromSource(original);
             if(changed){
+                onAttributesSetFromSource(original);
                 checkDirectiveChange(original);
             }
             patchChildren(original, null, original.childNodes, newer.childNodes);
