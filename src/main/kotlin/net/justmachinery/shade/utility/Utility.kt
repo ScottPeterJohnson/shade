@@ -2,7 +2,7 @@ package net.justmachinery.shade.utility
 
 import com.google.gson.GsonBuilder
 import kotlinx.coroutines.Job
-import kotlinx.css.CSSBuilder
+import kotlinx.css.CssBuilder
 import kotlinx.html.CommonAttributeGroupFacade
 import kotlinx.html.HtmlBlockTag
 import kotlinx.html.HtmlTagMarker
@@ -14,8 +14,8 @@ import org.intellij.lang.annotations.Language
 import org.slf4j.MDC
 
 @HtmlTagMarker
-fun CommonAttributeGroupFacade.withStyle(builder: CSSBuilder.() -> Unit) {
-    this.style = CSSBuilder().apply(builder).toString().trim()
+fun CommonAttributeGroupFacade.withStyle(builder: CssBuilder.() -> Unit) {
+    this.style = CssBuilder().apply(builder).toString().trim()
 }
 
 

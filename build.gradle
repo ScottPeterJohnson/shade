@@ -102,7 +102,7 @@ dependencies {
     implementation 'org.jetbrains.kotlin:kotlin-reflect:1.5.30'
 
     api "org.jetbrains.kotlinx:kotlinx-html-jvm:0.7.3"
-    api group: 'org.jetbrains.kotlin-wrappers', name: 'kotlin-css', version: '1.0.0-pre.218-kotlin-1.5.30'
+    api group: 'org.jetbrains.kotlin-wrappers', name: 'kotlin-css', version: '1.0.0-pre.243-kotlin-1.5.30'
 
     implementation 'com.google.code.gson:gson:2.8.8'
     api 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.2'
