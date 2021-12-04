@@ -9,8 +9,7 @@ import net.justmachinery.shade.render.ComponentAdd
 import net.justmachinery.shade.render.ComponentRenderState
 import net.justmachinery.shade.render.currentlyRendering
 import net.justmachinery.shade.routing.base.ComponentRouting
-import net.justmachinery.shade.state.Reaction
-import net.justmachinery.shade.state.Render
+import net.justmachinery.shade.state.*
 import kotlin.coroutines.CoroutineContext
 
 /**
@@ -20,14 +19,39 @@ import kotlin.coroutines.CoroutineContext
 abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : ComponentInitData<PropType>) : CoroutineScope, EventHandlers, ComponentRouting, ComponentAdd, ComponentHelpers, ComponentBase {
     companion object : KLogging()
 
+    private var propsAtom : Atom? = null
     internal var _props : PropType? = null
-    var props
-        get() = _props ?: throw IllegalStateException("""
-            Illegal props access, probably from a constructor or on init, e.g. "val foo = props.bar". This is not allowed 
-            because props may change on subsequent rerenders, while the component remains. Try a lazy getter instead,
-            e.g. "val foo get() = props.bar"
-        """.trimIndent())
-        internal set(value) { _props = value }
+        private set
+    internal fun initializeProps(value : PropType){ _props = value }
+    internal fun updateProps(value : PropType){
+        _props = value
+        synchronized(this) {
+            propsAtom?.let {
+                runChangeBatch(ChangeBatchChangePolicy.FORCE_ALLOWED) {
+                    it.reportChanged()
+                }
+            }
+        }
+    }
+
+    val props: PropType
+        get() {
+            val props = _props
+            if (props == null) {
+                throw IllegalStateException("""
+                    Illegal props access, probably from a constructor or on init, e.g. "val foo = props.bar". This is not allowed 
+                    because props may change on subsequent rerenders, while the component remains. Try a lazy getter instead,
+                    e.g. "val foo get() = props.bar"
+                """.trimIndent())
+            }
+            if(this != currentlyRendering.get()){ //Note the render function implicitly depends on props
+                synchronized(this){
+                    if(propsAtom == null){ propsAtom = Atom() }
+                    propsAtom!!
+                }.reportObserved()
+            }
+            return props
+        }
     val client = fullProps.client
     internal val baseContext = fullProps.context
     internal val key = fullProps.key

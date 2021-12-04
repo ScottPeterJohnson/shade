@@ -13,7 +13,7 @@ class ApplyJsTest : Component<Unit>(){
     override fun HtmlBlockTag.render() {
         h2 { +"JS application" }
         div {
-            applyJs("it.innerHTML = 'hello world';")
+            applyJs("it.innerHTML = 'This text was added through JS';")
         }
     }
 }

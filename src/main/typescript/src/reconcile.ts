@@ -158,7 +158,6 @@ function reconcileChildren(
 
     const finalChildren : Node[] = [];
 
-    const keyUsed = new Set<string>()
     while(originalIndex < originals.length || replacementIndex < replacements.length){
         let original : NodeOrComponent|undefined = originals[originalIndex];
         const newer : NodeOrComponent|undefined = replacements[replacementIndex];
@@ -174,10 +173,11 @@ function reconcileChildren(
         } else {
             const newerKey = getKey(newer);
             if(newerKey != null){
-                keyUsed.add(newerKey);
-                original = originalKeys[newerKey];
-                //We'll match this unkeyed original again on something without a key
-                originalIndex -= 1;
+                if(original){
+                    //We'll match this unkeyed original again on something without a key
+                    originalIndex -= 1;
+                }
+                original = originalKeys[newerKey]?.pop();
             }
 
             let add : Node[] = [];
@@ -195,7 +195,7 @@ function reconcileChildren(
             }
 
             const newerDirective = newer instanceof Component ? null : asShadeDirective(newer)
-            if(original && original instanceof Component && newerDirective instanceof Keep && newerDirective.id == original.id()){
+            if(original && original instanceof Component && newerDirective instanceof Keep && (newerDirective.id == original.id() || newerKey)){
                 add = asNodes(original);
             } else {
                 if(!original){
@@ -224,9 +224,10 @@ function reconcileChildren(
         }
     }
 
+    //All remaining keys in the map will not have been used.
     for(const key of Object.getOwnPropertyNames(originalKeys)){
-        if(!keyUsed.has(key)){
-            const original = originalKeys[key];
+        const originals = originalKeys[key];
+        for(let original of originals){
             for(let node of asNodes(original)){
                 checkDirectiveRemove(node);
             }
@@ -267,13 +268,17 @@ function collapseComponentChildren(list : ChildNodeListLike) : NodeOrComponent[]
     return result;
 }
 
-function collectKeysMap(childList : NodeOrComponent[]) : {[key:string] : NodeOrComponent} {
-    const keys : {[key:string] : NodeOrComponent} = {};
+function collectKeysMap(childList : NodeOrComponent[]) : {[key:string] : Array<NodeOrComponent>} {
+    const keys : {[key:string] : Array<NodeOrComponent>} = {};
     for(let i=0;i<childList.length;i++){
-        const child = childList[i];
+        const child = childList[i]
         const key = getKey(child)
         if(key != null){
-            keys[key] = child;
+            let list = keys[key]
+            if(!list){
+                list = keys[key] = []
+            }
+            list.push(child)
         }
     }
     return keys;

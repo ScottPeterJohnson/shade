@@ -90,7 +90,7 @@ class ErrorTests : Component<Unit>() {
                 //As only one user-event can be processed at a time.
                 //Instead, we can launch a new coroutine:
                 launch {
-                    delay(100 * 1000 * 1000)
+                    delay(100_000_000L)
                 }
                 //This coroutine is tied to the component and will be interrupted when its component is unmounted
             }

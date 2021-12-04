@@ -60,7 +60,7 @@ class RoutingDemoPage : Component<Unit>() {
                 p { +"This is a sub page." }
             }
 
-            override fun subDirectory(subDirectoryParams: SubDirectoryParams): SubDirectoryRouter<HtmlBlockTag> = object: SubDirectoryRouter<HtmlBlockTag>() {
+            override fun subDirectory(@Suppress("PARAMETER_NAME_CHANGED_ON_OVERRIDE") subDirectoryParams: SubDirectoryParams): SubDirectoryRouter<HtmlBlockTag> = object: SubDirectoryRouter<HtmlBlockTag>() {
                 override fun HtmlBlockTag.index() {
                     p { +"This is the index page of the subdirectory." }
                     p { +"The subdirectory param is: ${subDirectoryParams.subDirectoryParam}"}

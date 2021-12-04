@@ -110,10 +110,10 @@ private fun <T : Any, RenderIn : Tag> getOrConstructComponent(
         if(oldComponent is RenderTreeChild.ComponentChild && oldComponent.component::class == component){
             @Suppress("UNCHECKED_CAST")
             (oldComponent.component as AdvancedComponent<T, RenderIn>)
-            return if(oldComponent.component.props == props){
+            return if(oldComponent.component._props == props){
                 GetComponentResult.EXISTING_KEEP to oldComponent.component
             } else {
-                oldComponent.component.props = props
+                oldComponent.component.updateProps(props)
                 GetComponentResult.EXISTING_RERENDER to oldComponent.component
             }
         }

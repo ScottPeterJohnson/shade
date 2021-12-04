@@ -1,13 +1,12 @@
 package net.justmachinery.shade.components
 
-import kotlinx.css.Display
-import kotlinx.css.display
-import kotlinx.html.*
+import kotlinx.html.HtmlBlockTag
+import kotlinx.html.button
+import kotlinx.html.div
+import kotlinx.html.h2
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.newBackgroundColorOnRerender
 import net.justmachinery.shade.state.obs
-import net.justmachinery.shade.utility.key
-import net.justmachinery.shade.utility.withStyle
 
 /**
  * This example tests efficient rerendering of components by key.
@@ -15,64 +14,19 @@ import net.justmachinery.shade.utility.withStyle
  * which might retain an identity but change their number or positioning.
  */
 class KeyRerenderTest : Component<Unit>() {
-    var numbersList by obs((0 until 10).toList())
+    //Some keys are duplicates; this is not recommended and is here to test what happens.
+    var numbersList by obs((0 until 10).toList() + listOf(1,3,3,3,1,5))
     override fun HtmlBlockTag.render() {
-        h2 { +"Rerendering" }
-        style {
-            //Animation should flash whenever a component is newly created.
-            //language=CSS
-            unsafe { raw("""
-                @keyframes flash {
-                    from {
-                        background-color: black;
-                    }
-                    to {
-                        background-color: white;
-                    }
-                }
-                .flashNumber {
-                    animation: flash 5s;
-                }
-            """.trimIndent()) }
-        }
+        h2 { +"Rerendering by key" }
 
         div {
-            +"This test should flash only components that move. 4 should never change."
-        }
-        div {
-            withStyle {
-                display = Display.flex
-            }
-            div {
-                numbersList.forEach {
-                    div(classes = "flashNumber") {
-                        //We can give DOM elements keys
-                        key = it.toString()
-                        +"DOM $it"
-                    }
-                    if(it.rem(2) == 0){
-                        span(classes = "flashNumber") {
-                            +"($it is even)"
-                        }
-                    }
-                }
-            }
-            div {
-                numbersList.forEach {
-                    add(KeyRerenderTestShow::class, it, key = it.toString())
-                    if(it.rem(2) == 0){
-                        span(classes = "flashNumber") {
-                            +"($it is even)"
-                        }
-                    }
-                }
+            numbersList.forEach {
+                add(KeyRerenderTestShow::class, it, key = it.toString())
             }
         }
         button {
             onClick {
                 val sort = numbersList.sortedBy { Math.random() }.toMutableList()
-                sort[sort.indexOf(4)] = sort[4]
-                sort[4] = 4
                 numbersList = sort
             }
             +"Shuffle list"

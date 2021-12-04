@@ -84,7 +84,7 @@ class ShadeRoot(
                 clazz.java.getDeclaredConstructor(ComponentInitData::class.java).also { it.isAccessible = true }.newInstance(props)
             }
         }!!
-        component.props = props.props
+        component.initializeProps(props.props)
         afterConstructComponent(component)
         return component
     }
