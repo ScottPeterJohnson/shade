@@ -1,14 +1,18 @@
 package net.justmachinery.shade.components
 
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.html.*
+import net.justmachinery.shade._app
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.component.MountingContext
 import net.justmachinery.shade.newBackgroundColorOnRerender
+import net.justmachinery.shade.root
 import net.justmachinery.shade.routing.base.UrlInfo
 import net.justmachinery.shade.state.obs
 import java.time.Duration
 import java.time.temporal.ChronoUnit
+import kotlin.concurrent.thread
 
 /**
  * This is our root component. A component is, like React, a combination of props, state, and the ability to rerender as
@@ -97,6 +101,19 @@ class RootPageComponent : Component<Unit>(){
                         //Halve the delay (it's a round trip)
                         client.root.simulateExtraDelay = if(delay == 0L) null else Duration.of(delay/2, ChronoUnit.MILLIS)
                     }
+                }
+            }
+
+            div {
+                button {
+                    onClick {
+                        root.allClients().forEach { it.executeScript("window.alert('Server shutdown in 5 seconds...')")}
+                        delay(5000)
+                        thread {
+                            _app!!.stop()
+                        }
+                    }
+                    +"Graceful Shutdown"
                 }
             }
         }

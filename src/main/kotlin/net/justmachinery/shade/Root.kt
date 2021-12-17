@@ -13,6 +13,7 @@ import net.justmachinery.shade.utility.*
 import java.io.Writer
 import java.time.Duration
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.CoroutineContext
 import kotlin.reflect.KClass
 import kotlin.reflect.full.isSubclassOf
@@ -161,7 +162,8 @@ class ShadeRoot(
      */
     fun handler(send : (String)->Unit, disconnect : ()->Unit) = MessageHandler(send, disconnect)
 
-    private val clientDataMap = Collections.synchronizedMap(mutableMapOf<UUID, Client>())
+    private val clientDataMap = ConcurrentHashMap<UUID, Client>()
+    fun allClients() : Collection<Client> = clientDataMap.values
 
     inner class MessageHandler internal constructor(
         private val send : (String)->Unit,

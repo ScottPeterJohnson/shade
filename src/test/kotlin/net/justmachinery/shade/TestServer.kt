@@ -19,6 +19,7 @@ fun main(){
         it.addStaticFiles("js")
         it.addStaticFiles("telephoneInput")
     }.start(9905)
+    _app = app
 
     //This is a webserver specific shim that passes messages and events to Shade
     val sessions = Collections.synchronizedMap(mutableMapOf<Session, ShadeRoot.MessageHandler>())
@@ -68,6 +69,9 @@ fun main(){
     }
 }
 
+//You probably shouldn't pass things around globally in a production project (use dependency injection),
+// but this was done here for simplicity
+var _app : Javalin? = null
 
 
 val root = ShadeRoot(

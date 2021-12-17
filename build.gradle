@@ -13,7 +13,7 @@ apply plugin: 'com.github.ben-manes.versions' //For finding outdated dependencie
 
 group 'net.justmachinery'
 archivesBaseName = "shade"
-version '0.5.10'
+version '0.5.11'
 
 task testServer(type: JavaExec){
     classpath = sourceSets.test.runtimeClasspath
