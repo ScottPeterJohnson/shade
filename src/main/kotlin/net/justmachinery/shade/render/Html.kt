@@ -3,11 +3,11 @@ package net.justmachinery.shade.render
 import kotlinx.html.*
 import kotlinx.html.consumers.onFinalize
 import kotlinx.html.consumers.onFinalizeMap
+import kotlinx.html.org.w3c.dom.events.Event
 import kotlinx.html.stream.HTMLStreamBuilder
 import net.justmachinery.shade.AttributeNames
 import net.justmachinery.shade.DirectiveType
 import net.justmachinery.shade.scriptTypeSignifier
-import org.w3c.dom.events.Event
 import java.io.Writer
 import java.util.*
 

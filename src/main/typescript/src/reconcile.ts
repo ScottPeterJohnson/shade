@@ -97,6 +97,12 @@ function reconcileNodes(original : Node, newer : Node) : Node {
             patchChildren(original, null, original.childNodes, newer.childNodes);
             return original;
         }
+    } else if (original instanceof Text && newer instanceof Text){
+        if(original.textContent == newer.textContent){
+            return original;
+        } else {
+            return newer;
+        }
     } else {
         return newer;
     }
@@ -170,6 +176,14 @@ function reconcileChildren(
                 checkDirectiveRemove(node);
             }
             originalIndex += 1;
+        } else if (original instanceof Text) {
+            //Text nodes have no interesting identity or children to preserve, and the
+            //Kotlin side can't track them for position matching, so we just skip over them
+            //in comparisons and add the newer text always.
+            originalIndex += 1;
+        } else if (newer instanceof Text) {
+            finalChildren.push(newer)
+            replacementIndex += 1;
         } else {
             const newerKey = getKey(newer);
             if(newerKey != null){

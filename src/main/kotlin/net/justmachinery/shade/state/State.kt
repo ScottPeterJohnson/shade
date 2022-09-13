@@ -14,4 +14,8 @@ fun <T> computed(lazy : Boolean = true, block: () -> T) =
  * Creates a block that runs now and whenever its dependencies change.
  */
 fun reaction(block: () -> Unit) = Reaction(block)
+
+/**
+ * Runs a block in a change batch, so that all of its changes are only visible at the end.
+ */
 fun <T> action(block: () -> T) = runChangeBatch(ChangeBatchChangePolicy.ALLOWED, block = block)

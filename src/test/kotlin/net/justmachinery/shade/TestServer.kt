@@ -16,8 +16,8 @@ fun main(){
     //A simple demo page for Shade using the spark web framework.
     //Any web framework can be used, as long as it supports websockets.
     val app = Javalin.create {
-        it.addStaticFiles("js")
-        it.addStaticFiles("telephoneInput")
+        it.staticFiles.add("js")
+        it.staticFiles.add("telephoneInput")
     }.start(9905)
     _app = app
 
@@ -39,10 +39,10 @@ fun main(){
 
     val shadeDemo = Handler { ctx ->
         //This is Jetty specific; it uses ISO8609 by default
-        ctx.res.characterEncoding = "UTF-8"
-        ctx.res.contentType = "text/html"
+        ctx.res().characterEncoding = "UTF-8"
+        ctx.res().contentType = "text/html"
         //Let's throw some shade:
-        root.render(ctx.res.writer) {
+        root.render(ctx.res().writer) {
             head {}
             body { tag ->
                 //Adding this line is convenient because Kotlin does not yet allow multiple receivers on a lambda
@@ -53,8 +53,8 @@ fun main(){
                     //Look at RootComponent for a more in-depth overview of how to render with shade
                     add(
                         RootComponent::class, UrlInfo.of(
-                            ctx.req.pathInfo,
-                            ctx.req.queryString
+                            ctx.req().pathInfo,
+                            ctx.req().queryString
                         )
                     )
                 }

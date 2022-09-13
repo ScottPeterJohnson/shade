@@ -82,6 +82,8 @@ class RootPageComponent : Component<Unit>(){
 
             add(LoadScriptTest::class)
 
+            add(ConditionalRenderingTest::class)
+
             h2 { +"Demo settings" }
 
             button {
