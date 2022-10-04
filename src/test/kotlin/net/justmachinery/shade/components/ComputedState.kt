@@ -1,13 +1,13 @@
 package net.justmachinery.shade.components
 
-import kotlinx.html.HtmlBlockTag
-import kotlinx.html.div
-import kotlinx.html.h2
+import kotlinx.html.*
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.newBackgroundColorOnRerender
 import net.justmachinery.shade.state.computed
 import net.justmachinery.shade.state.obs
+import net.justmachinery.shade.state.rivObservable
 import net.justmachinery.shade.utility.getSet
+import java.util.*
 
 class ComputedState : Component<Unit>() {
     var firstNumber by obs(5)
@@ -15,6 +15,7 @@ class ComputedState : Component<Unit>() {
     val sum by computed { firstNumber + secondNumber }
     val sumMod10 by computed { sum % 10 }
     val sumMod10Plus3 by computed { sumMod10 + 3 }
+    var rivProp by obs(3)
     override fun HtmlBlockTag.render() {
         h2 { +"Computed State" }
         div {
@@ -54,6 +55,31 @@ class ComputedState : Component<Unit>() {
                     +(sumMod10Plus3.toString())
                 }
             }
+        }
+        add(RivSubcomponent::class, rivProp)
+        button {
+            +"Increment props"
+            onClick {
+                rivProp += 1
+            }
+        }
+    }
+}
+
+private class RivSubcomponent : Component<Int>(){
+    val rivId = UUID.randomUUID()
+    var number by rivObservable { props + 1 }
+    override fun HtmlBlockTag.render() {
+        h3 { +"Reactive Initial Value (computed from props)" }
+        p {
+            +"Number is ${number}"
+        }
+        p {
+            +"Component is ${rivId}"
+        }
+        button {
+            onClick { number += 1}
+            +"Increment"
         }
     }
 }

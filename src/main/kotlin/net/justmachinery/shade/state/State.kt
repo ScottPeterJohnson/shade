@@ -1,6 +1,11 @@
 package net.justmachinery.shade.state
 
 fun <T> obs(value: T) = observable(value)
+
+/**
+ * Creates an observable value, which will cause dependent blocks (like renders) to update when it changes.
+ * In Shade, [value] should not be derived from props; use [rivObservable] instead.
+ */
 fun <T> observable(value: T) = ObservableValue(value)
 
 /**
@@ -9,6 +14,13 @@ fun <T> observable(value: T) = ObservableValue(value)
  */
 fun <T> computed(lazy : Boolean = true, block: () -> T) =
     ComputedValue(block, lazy)
+
+/**
+ * Create an observable value. The value will reset to the output of
+ * block() whenever it changes, but can be otherwise set.
+ */
+fun <T> rivObservable(block: () -> T) =
+    RivObservableValue(block)
 
 /**
  * Creates a block that runs now and whenever its dependencies change.

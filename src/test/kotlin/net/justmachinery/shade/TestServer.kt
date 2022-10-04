@@ -38,11 +38,9 @@ fun main(){
     }
 
     val shadeDemo = Handler { ctx ->
-        //This is Jetty specific; it uses ISO8609 by default
-        ctx.res().characterEncoding = "UTF-8"
-        ctx.res().contentType = "text/html"
+        ctx.contentType("text/html;charset=UTF-8")
         //Let's throw some shade:
-        root.render(ctx.res().writer) {
+        root.render(ctx.outputStream().bufferedWriter()) {
             head {}
             body { tag ->
                 //Adding this line is convenient because Kotlin does not yet allow multiple receivers on a lambda
