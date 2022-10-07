@@ -1,12 +1,12 @@
 package net.justmachinery.shade.components
 
 import kotlinx.html.*
+import net.justmachinery.futility.getSet
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.newBackgroundColorOnRerender
 import net.justmachinery.shade.state.computed
 import net.justmachinery.shade.state.obs
 import net.justmachinery.shade.state.rivObservable
-import net.justmachinery.shade.utility.getSet
 import java.util.*
 
 class ComputedState : Component<Unit>() {

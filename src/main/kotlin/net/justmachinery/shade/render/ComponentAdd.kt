@@ -1,12 +1,12 @@
 package net.justmachinery.shade.render
 
 import kotlinx.html.Tag
+import net.justmachinery.futility.lambdas.eqL
 import net.justmachinery.shade.DirectiveType
 import net.justmachinery.shade.component.*
 import net.justmachinery.shade.componentIdPrefix
 import net.justmachinery.shade.contextInRenderingThread
 import net.justmachinery.shade.utility.RenderFunction
-import net.justmachinery.shade.utility.eqL
 import kotlin.reflect.KClass
 
 interface ComponentAdd : ComponentBase {

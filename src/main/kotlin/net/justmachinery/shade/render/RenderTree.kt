@@ -54,7 +54,7 @@ internal fun <T : Tag> T.updateRenderTree(
 
     renderState.location = frame
 
-    renderTreeTagRecorder(this, renderState){ cb() }
+    renderTreeTagRecorder(this, renderState, cb)
 
     if(oldRenderTree != null){
         unmountDiffInRenderTrees(oldRenderTree, newRoot)
@@ -74,9 +74,7 @@ internal fun <T : Tag> renderTreeTagRecorder(parentTag : T, renderState: Compone
         renderState = renderState
     )
     try {
-        parentTag.run {
-            cb()
-        }
+        parentTag.cb()
     } finally {
         consumer.recorder = oldRecorder
     }

@@ -2,6 +2,7 @@ package net.justmachinery.shade.routing.base
 
 import kotlinx.html.HtmlTagMarker
 import kotlinx.html.Tag
+import net.justmachinery.futility.lambdas.EqLambda
 import net.justmachinery.shade.addContext
 import net.justmachinery.shade.component.AdvancedComponent
 import net.justmachinery.shade.component.ComponentInTag
@@ -13,7 +14,6 @@ import net.justmachinery.shade.routing.annotation.RoutedPage
 import net.justmachinery.shade.routing.annotation.RoutedPath
 import net.justmachinery.shade.state.ObservableValue
 import net.justmachinery.shade.state.obs
-import net.justmachinery.shade.utility.EqLambda
 import net.justmachinery.shade.utility.RenderFunction
 
 

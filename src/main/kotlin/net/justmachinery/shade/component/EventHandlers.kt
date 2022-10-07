@@ -1,6 +1,7 @@
 package net.justmachinery.shade.component
 
 import kotlinx.html.Tag
+import net.justmachinery.futility.Json
 import net.justmachinery.shade.AttributeNames
 import net.justmachinery.shade.DirectiveType
 import net.justmachinery.shade.ERROR_HANDLER_IDENTIFIER
@@ -8,7 +9,6 @@ import net.justmachinery.shade.currentContext
 import net.justmachinery.shade.render.scriptDirective
 import net.justmachinery.shade.render.shade
 import net.justmachinery.shade.render.toRenderTreeTagLocation
-import net.justmachinery.shade.utility.Json
 import net.justmachinery.shade.utility.gson
 
 interface EventHandlers : ComponentBase {

@@ -1,7 +1,6 @@
 package net.justmachinery.shade.utility
 
 import com.google.gson.GsonBuilder
-import kotlinx.coroutines.Job
 import kotlinx.css.CssBuilder
 import kotlinx.html.CommonAttributeGroupFacade
 import kotlinx.html.HtmlBlockTag
@@ -11,7 +10,6 @@ import net.justmachinery.shade.AttributeNames
 import net.justmachinery.shade.DirectiveType
 import net.justmachinery.shade.render.scriptDirective
 import org.intellij.lang.annotations.Language
-import org.slf4j.MDC
 
 @HtmlTagMarker
 fun CommonAttributeGroupFacade.withStyle(builder: CssBuilder.() -> Unit) {
@@ -21,28 +19,6 @@ fun CommonAttributeGroupFacade.withStyle(builder: CssBuilder.() -> Unit) {
         this.style = "${this.style};${CssBuilder().apply(builder).toString().trim()}"
     }
 }
-
-
-internal inline fun <T> withLoggingInfo(vararg pair: Pair<String, String>, body: () -> T): T {
-    val oldValues = arrayOfNulls<String?>(pair.size)
-    try {
-        pair.forEachIndexed { index, it ->
-            oldValues[index] = MDC.get(it.first)
-            MDC.put(it.first, it.second)
-        }
-        return body()
-    } finally {
-        pair.forEachIndexed { index, it ->
-            if(oldValues[index] == null){
-                MDC.remove(it.first)
-            } else {
-                MDC.put(it.first, oldValues[index])
-            }
-        }
-    }
-}
-
-internal fun String.ellipsizeAfter(maxLength : Int) = if(this.length > maxLength) this.take(maxLength) + "..." else this
 
 var HtmlBlockTag.key : String?
     get() = attributes[AttributeNames.Key.raw]
@@ -72,8 +48,6 @@ fun HtmlBlockTag.applyJs(
     )
 }
 
-data class Json(val raw : String)
-
 internal fun <T1: Any, T2: Any> Sequence<T1>.zipAll(other: Sequence<T2>): Sequence<Pair<T1?, T2?>> {
     val i1 = this.iterator()
     val i2 = other.iterator()
@@ -87,55 +61,6 @@ internal fun <T1: Any, T2: Any> Sequence<T1>.zipAll(other: Sequence<T2>): Sequen
     }
 }
 
-
-internal class SingleConcurrentExecution(private val launch : ()-> Job){
-    private val runningLock = Object()
-    private var running = false
-    private var waiting = false
-
-    fun maybeLaunch(){
-        val proceed = synchronized(runningLock){
-            if(running){
-                waiting = true
-                false
-            } else {
-                true
-            }
-        }
-        if(proceed){
-            launch().invokeOnCompletion {
-                release()
-            }
-        }
-    }
-
-    fun runSync(cb : ()->Unit){
-        synchronized(runningLock){
-            if(running){
-                runningLock.wait()
-            }
-            running = true
-        }
-        try {
-            cb()
-        } finally {
-            release()
-        }
-    }
-
-    private fun release(){
-        val wasWaiting = synchronized(runningLock){
-            running = false
-            val wasWaiting = waiting
-            waiting = false
-            runningLock.notify()
-            wasWaiting
-        }
-        if(wasWaiting){
-            maybeLaunch()
-        }
-    }
-}
 
 internal fun <T1: Any, T2: Any, T3 : Any> MutableMap<T1,T2>.mergeMut(other: Sequence<Pair<T1,T3>>, cb : (key : T1, existing: T2?, new: T3?)->T2?) {
     val otherMap = other.toMap(HashMap())
@@ -157,26 +82,5 @@ internal fun <T1: Any, T2: Any, T3 : Any> MutableMap<T1,T2>.mergeMut(other: Sequ
 }
 
 typealias RenderFunction<RenderIn> = RenderIn.()->Unit
-
-sealed class ErrorOr<T> {
-    data class Error<T>(val exception: Exception) : ErrorOr<T>()
-    data class Result<T>(val result : T) : ErrorOr<T>()
-
-    fun isResult() = this is Result
-    fun unwrap() : T = when(this){
-        is Error -> throw this.exception
-        is Result -> this.result
-    }
-}
-
-inline fun <T,R> ThreadLocal<T>.withValue(value : T, cb: ()->R) : R {
-    val oldValue = get()
-    set(value)
-    return try {
-        cb()
-    } finally {
-        set(oldValue)
-    }
-}
 
 internal val gson = GsonBuilder().disableHtmlEscaping().create()

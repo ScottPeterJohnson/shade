@@ -1,6 +1,6 @@
 package net.justmachinery.shade.state
 
-import net.justmachinery.shade.utility.GetSet
+import net.justmachinery.futility.GetSet
 import kotlin.reflect.KProperty
 
 typealias Obs<T> = ObservableValue<T>

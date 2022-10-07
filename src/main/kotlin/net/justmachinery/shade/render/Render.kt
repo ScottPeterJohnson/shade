@@ -8,13 +8,13 @@ import com.google.common.collect.Sets
 import kotlinx.html.HTML
 import kotlinx.html.Tag
 import kotlinx.html.TagConsumer
+import net.justmachinery.futility.withValue
 import net.justmachinery.shade.*
 import net.justmachinery.shade.component.AdvancedComponent
 import net.justmachinery.shade.component.doMount
 import net.justmachinery.shade.state.ChangeBatchChangePolicy
 import net.justmachinery.shade.state.runChangeBatch
 import net.justmachinery.shade.utility.gson
-import net.justmachinery.shade.utility.withValue
 import java.io.ByteArrayOutputStream
 import java.lang.reflect.Constructor
 import java.util.*

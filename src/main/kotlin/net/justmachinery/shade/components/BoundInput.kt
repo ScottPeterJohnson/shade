@@ -1,15 +1,15 @@
 package net.justmachinery.shade.components
 
 import kotlinx.html.*
+import net.justmachinery.futility.GetSet
+import net.justmachinery.futility.Json
+import net.justmachinery.futility.lambdas.EqLambda
 import net.justmachinery.shade.AttributeNames
 import net.justmachinery.shade.SocketScopeNames
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.component.MountingContext
 import net.justmachinery.shade.component.PropsType
 import net.justmachinery.shade.state.Atom
-import net.justmachinery.shade.utility.EqLambda
-import net.justmachinery.shade.utility.GetSet
-import net.justmachinery.shade.utility.Json
 import net.justmachinery.shade.utility.gson
 import java.util.concurrent.atomic.AtomicInteger
 

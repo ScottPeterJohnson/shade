@@ -1,6 +1,10 @@
 package net.justmachinery.shade.components
 
 import kotlinx.html.*
+import net.justmachinery.futility.GetSet
+import net.justmachinery.futility.Json
+import net.justmachinery.futility.getSet
+import net.justmachinery.futility.lambdas.EqLambda
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.component.MountingContext
 import net.justmachinery.shade.component.PropsType

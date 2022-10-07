@@ -62,8 +62,6 @@ fun <T> AdvancedComponent<*,*>.handleErrors(onError: ComponentErrorHandlingConte
     val currentContext = currentContext()
     return addContext(ERROR_HANDLER_IDENTIFIER.with(ContextErrorHandler(previous = currentContext[ERROR_HANDLER_IDENTIFIER], handle = onError))
     ){
-        handlingErrors(ContextErrorSource.RENDER){
-            cb()
-        }
+        handlingErrors(ContextErrorSource.RENDER, cb)
     }
 }

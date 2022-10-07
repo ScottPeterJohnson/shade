@@ -3,15 +3,16 @@ package net.justmachinery.shade
 import kotlinx.coroutines.*
 import kotlinx.html.HTML
 import mu.KLogging
+import net.justmachinery.futility.Json
+import net.justmachinery.futility.logging.MdcPair
+import net.justmachinery.futility.logging.withLoggingInfo
+import net.justmachinery.futility.mechanisms.SingleConcurrentExecution
+import net.justmachinery.futility.strings.ellipsizeAfter
 import net.justmachinery.shade.component.AdvancedComponent
 import net.justmachinery.shade.component.doUnmount
 import net.justmachinery.shade.render.renderRoot
 import net.justmachinery.shade.render.rerender
 import net.justmachinery.shade.state.batchChangesUntilSuspend
-import net.justmachinery.shade.utility.Json
-import net.justmachinery.shade.utility.SingleConcurrentExecution
-import net.justmachinery.shade.utility.ellipsizeAfter
-import net.justmachinery.shade.utility.withLoggingInfo
 import org.intellij.lang.annotations.Language
 import org.slf4j.MDC
 import java.util.*
@@ -44,9 +45,7 @@ class Client(
     }
 
     private inline fun <T> logging(cb: ()->T) : T {
-        return withLoggingInfo("shadeClientId" to clientId.toString()){
-            cb()
-        }
+        return withLoggingInfo(MdcPair("shadeClientId", clientId.toString()), body = cb)
     }
 
     private val nextComponentId = AtomicInteger(0)
@@ -72,7 +71,7 @@ class Client(
      */
     internal fun renderRoot(builder : HTML, component : ShadeRootComponent) = logging {
         logger.debug { "Rendering root $component" }
-        renderLock.runSync {
+        synchronized(renderLock){
             rootComponents.add(component)
             component.client.swallowExceptions(message = { "While adding root" }) {
                 component.renderRoot(builder)
@@ -84,28 +83,30 @@ class Client(
     /**
      * Only one thread should be rendering for a client at a time.
      */
-    private val renderLock = SingleConcurrentExecution(this::rerender)
+    private val renderLock = SingleConcurrentExecution(this::rerender) { coroutineScope.launch { it() } }
 
     /**
      * Re-render dirty components and send their updates over websocket
      */
-    private fun rerender() : Job = coroutineScope.launch {
-        logging {
-            //We render from the top of the tree hierarchy down, to avoid excessive rerenders when a parent and
-            //some child both depend on some state marked dirty.
-            val ordered = synchronized(needRerender) {
-                val result = needRerender.sortedBy { it.treeDepth }
-                needRerender.clear()
-                result
+    private fun rerender(){
+        synchronized(renderLock){
+            logging {
+                //We render from the top of the tree hierarchy down, to avoid excessive rerenders when a parent and
+                //some child both depend on some state marked dirty.
+                val ordered = synchronized(needRerender) {
+                    val result = needRerender.sortedBy { it.treeDepth }
+                    needRerender.clear()
+                    result
+                }
+                logger.debug { "Rerendering: ${ordered.joinToString(",")}" }
+                rerender(this@Client, ordered)
             }
-            logger.debug { "Rerendering: ${ordered.joinToString(",")}" }
-            rerender(this@Client, ordered)
         }
     }
 
     private fun triggerReRender() {
         if(batchReRenders.get() == 0){
-            renderLock.maybeLaunch()
+            renderLock.run()
         }
     }
 
@@ -165,7 +166,7 @@ class Client(
         }
     }
 
-    internal fun <T> swallowExceptions(message: (()->String)? = null, cb : ()->T) : T? {
+    internal inline fun <T> swallowExceptions(noinline message: (()->String)? = null, cb : ()->T) : T? {
         return try {
             cb()
         } catch(t : Throwable){

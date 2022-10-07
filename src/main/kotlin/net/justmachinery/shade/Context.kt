@@ -1,7 +1,7 @@
 package net.justmachinery.shade
 
+import net.justmachinery.futility.withValue
 import net.justmachinery.shade.component.AdvancedComponent
-import net.justmachinery.shade.utility.withValue
 import java.util.concurrent.atomic.AtomicInteger
 
 fun currentContext() = contextInRenderingThread.get() ?: ShadeContext.empty

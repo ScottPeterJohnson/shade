@@ -8,6 +8,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.html.*
 import mu.KLogging
+import net.justmachinery.futility.Json
+import net.justmachinery.futility.lambdas.EqLambda
+import net.justmachinery.futility.lambdas.eqL
+import net.justmachinery.futility.logging.MdcPair
+import net.justmachinery.futility.logging.withLoggingInfo
+import net.justmachinery.futility.strings.ellipsizeAfter
+import net.justmachinery.futility.withValue
 import net.justmachinery.shade.component.*
 import net.justmachinery.shade.render.shadeToString
 import net.justmachinery.shade.render.shadeToWriter
@@ -120,7 +127,7 @@ class ShadeRoot(
     private fun renderComponentAsRoot(
         client : Client,
         builder : HTML,
-        cb : EqLambda<ShadeRootRender.()->Unit>
+        cb : EqLambda<ShadeRootRender.() -> Unit>
     ){
         val propObj = ComponentInitData(
             client = client,
@@ -152,7 +159,7 @@ class ShadeRoot(
         }
 
         clientDataMap[id] = client
-        withLoggingInfo("shadeClientId" to id.toString()){
+        withLoggingInfo(MdcPair("shadeClientId", id.toString())){
             logger.info { "Created new client id" }
         }
 
@@ -204,7 +211,7 @@ class ShadeRoot(
 
         private fun processMessage(message : String){
             synchronized(this){
-                withLoggingInfo("shadeClientId" to clientId.toString()){
+                withLoggingInfo(MdcPair("shadeClientId", clientId.toString())){
                     logger.trace { "Message received: ${message.ellipsizeAfter(200)}" }
                     if(clientData == null){
                         try {
@@ -246,7 +253,7 @@ class ShadeRoot(
 
         fun onDisconnect(){
             synchronized(this){
-                withLoggingInfo("shadeClientId" to clientId.toString()){
+                withLoggingInfo(MdcPair("shadeClientId", clientId.toString())){
                     logger.info { "Client disconnected" }
                 }
                 clientId?.let {

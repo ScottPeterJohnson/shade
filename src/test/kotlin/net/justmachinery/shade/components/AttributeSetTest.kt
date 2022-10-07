@@ -3,11 +3,11 @@ package net.justmachinery.shade.components
 import kotlinx.css.Color
 import kotlinx.css.color
 import kotlinx.html.*
+import net.justmachinery.futility.getSet
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.state.Atom
 import net.justmachinery.shade.state.obs
 import net.justmachinery.shade.state.observable
-import net.justmachinery.shade.utility.getSet
 import net.justmachinery.shade.utility.withStyle
 
 /**

@@ -4,11 +4,11 @@ import kotlinx.html.HtmlBlockTag
 import kotlinx.html.INPUT
 import kotlinx.html.InputType
 import kotlinx.html.input
+import net.justmachinery.futility.GetSet
+import net.justmachinery.futility.Json
+import net.justmachinery.futility.lambdas.EqLambda
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.component.PropsType
-import net.justmachinery.shade.utility.EqLambda
-import net.justmachinery.shade.utility.GetSet
-import net.justmachinery.shade.utility.Json
 
 class BoundCheckbox : Component<BoundCheckbox.Props>() {
     data class Props(

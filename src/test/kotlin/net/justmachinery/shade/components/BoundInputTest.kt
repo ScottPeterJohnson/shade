@@ -4,10 +4,10 @@ import kotlinx.html.HtmlBlockTag
 import kotlinx.html.button
 import kotlinx.html.h2
 import kotlinx.html.p
+import net.justmachinery.futility.getSet
+import net.justmachinery.futility.lambdas.EqLambda
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.state.obs
-import net.justmachinery.shade.utility.EqLambda
-import net.justmachinery.shade.utility.getSet
 import java.util.*
 
 class BoundInputTest : Component<Unit>() {

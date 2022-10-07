@@ -1,7 +1,7 @@
 package net.justmachinery.shade.state
 
+import net.justmachinery.futility.withValue
 import net.justmachinery.shade.component.AdvancedComponent
-import net.justmachinery.shade.utility.withValue
 import kotlin.reflect.KProperty
 
 
@@ -131,9 +131,7 @@ class Reaction(private val cb: () -> Unit) : ReactiveObserver() {
     }
 
     fun run() {
-        runRecordingDependencies {
-            cb()
-        }
+        runRecordingDependencies(cb)
     }
 
     override fun toString() = "Reaction($cb)"

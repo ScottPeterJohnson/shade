@@ -1,10 +1,10 @@
 package net.justmachinery.shade.components
 
 import kotlinx.html.*
+import net.justmachinery.futility.GetSet
+import net.justmachinery.futility.lambdas.eqL
 import net.justmachinery.shade.component.AdvancedComponent
 import net.justmachinery.shade.render.ComponentAdd
-import net.justmachinery.shade.utility.GetSet
-import net.justmachinery.shade.utility.eqL
 import kotlin.reflect.KClass
 
 interface ComponentHelpers : ComponentAdd {

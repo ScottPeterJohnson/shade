@@ -1,7 +1,7 @@
 package net.justmachinery.shade.component
 
 import kotlinx.html.Tag
-import net.justmachinery.shade.utility.EqLambda
+import net.justmachinery.futility.lambdas.EqLambda
 
 /**
  * A component that just delegates to a render function

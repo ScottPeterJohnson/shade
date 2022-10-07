@@ -1,12 +1,12 @@
 package net.justmachinery.shade.routing.base
 
 import kotlinx.html.Tag
+import net.justmachinery.futility.lambdas.eqL
 import net.justmachinery.shade.addContext
 import net.justmachinery.shade.component.AdvancedComponent
 import net.justmachinery.shade.currentContext
 import net.justmachinery.shade.state.ChangeBatchChangePolicy
 import net.justmachinery.shade.state.runChangeBatch
-import net.justmachinery.shade.utility.eqL
 import kotlin.reflect.KClass
 
 internal fun <RenderIn : Tag> RenderIn.startRoutingInternal(
