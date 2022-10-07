@@ -41,10 +41,10 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
                 throw IllegalStateException("""
                     Illegal props access, probably from a constructor or on init, e.g. "val foo = props.bar". This is not allowed 
                     because props may change on subsequent rerenders, while the component remains. Try a lazy getter instead,
-                    e.g. "val foo get() = props.bar"
+                    e.g. "val foo get() = props.bar", or "val x by computed { ... }". If you want to initialize mutable state from props, use a rivObservable.
                 """.trimIndent())
             }
-            if(this != currentlyRendering.get()){ //Note the render function implicitly depends on props
+            if((observeBlock.get()?.observer as? Render)?.component != this){ //Note the render function implicitly depends on props
                 synchronized(this){
                     if(propsAtom == null){ propsAtom = Atom() }
                     propsAtom!!

@@ -1,5 +1,7 @@
 package net.justmachinery.shade.render
 
+import com.google.common.cache.CacheBuilder
+import com.google.common.cache.CacheLoader
 import com.google.common.collect.BiMap
 import com.google.common.collect.HashBiMap
 import com.google.common.collect.Sets
@@ -11,10 +13,10 @@ import net.justmachinery.shade.component.AdvancedComponent
 import net.justmachinery.shade.component.doMount
 import net.justmachinery.shade.state.ChangeBatchChangePolicy
 import net.justmachinery.shade.state.runChangeBatch
-import net.justmachinery.shade.utility.applyWrappers
 import net.justmachinery.shade.utility.gson
 import net.justmachinery.shade.utility.withValue
 import java.io.ByteArrayOutputStream
+import java.lang.reflect.Constructor
 import java.util.*
 
 private val threadRenderingBatch = ThreadLocal<RenderBatch>()
@@ -93,9 +95,8 @@ private fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.updateRender(){
     val html = ByteArrayOutputStream().let { baos ->
         baos.writer().buffered().use {
             val consumer = shadeToWriter(it)
-            val tag = renderIn.java.getDeclaredConstructor(Map::class.java, TagConsumer::class.java)
-                .also { it.isAccessible = true }
-                .newInstance(emptyMap<String,String>(), consumer)
+            val tag = tagConstructorCache[renderIn.java]
+                .newInstance(emptyMap<String,String>(), consumer) as Tag?
             consumer.shade.containerTag = tag
             @Suppress("UNCHECKED_CAST")
             renderInternal(this, tag as RenderIn, addMarkers = false)
@@ -108,6 +109,14 @@ private fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.updateRender(){
     val escapedHtml = gson.toJson(html)
     client.executeScript("${SocketScopeNames.reconcile.raw}(${renderState.componentId},$escapedHtml);")
 }
+private val tagConstructorCache = CacheBuilder.newBuilder().build(object : CacheLoader<Class<*>, Constructor<*>>() {
+    override fun load(key: Class<*>): Constructor<*> {
+        val constructor = key.getDeclaredConstructor(Map::class.java, TagConsumer::class.java)
+        constructor.isAccessible = true
+        return constructor
+    }
+
+})
 
 internal fun <RenderIn : Tag> renderInternal(
     component: AdvancedComponent<*, RenderIn>,
@@ -128,13 +137,16 @@ internal fun <RenderIn : Tag> renderInternal(
 
     try {
         tag.updateRenderTree(renderState) {
-            applyWrappers(listOf(
-                { component.renderDependencies.runRecordingDependencies(it) },
-                { withShadeContext(component.baseContext, it) },
-                { component.handlingErrors(ContextErrorSource.RENDER, it) },
-                { currentlyRendering.withValue(component, it) }
-            )){
-                component.run { render() }
+            component.renderDependencies.runRecordingDependencies {
+                withShadeContext(component.baseContext){
+                    component.handlingErrors(ContextErrorSource.RENDER) {
+                        currentlyRendering.withValue(component) {
+                            component.run {
+                                render()
+                            }
+                        }
+                    }
+                }
             }
         }
     } finally {

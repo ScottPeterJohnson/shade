@@ -5,7 +5,11 @@ import net.justmachinery.shade.utility.withValue
 import kotlin.reflect.KProperty
 
 
-internal val observeBlock = ThreadLocal<MutableSet<Atom>?>()
+internal val observeBlock = ThreadLocal<ObserveBlock?>()
+internal data class ObserveBlock(
+    val observer : ReactiveObserver,
+    val observed : MutableSet<Atom>
+)
 
 fun ignoringChanges(cb : ()->Unit) = observeBlock.withValue(null){ cb() }
 
@@ -13,14 +17,14 @@ sealed class ReactiveObserver {
     internal abstract val observing: MutableSet<Atom>
 
     internal fun <T> runRecordingDependencies(run : ()->T) : T {
-        val newState = mutableSetOf<Atom>()
+        val newState = ObserveBlock(observer = this, observed = mutableSetOf())
         try {
             observeBlock.withValue(newState) {
                 return run()
             }
         } finally {
             observing.removeAll { dependency ->
-                if (dependency !in newState) {
+                if (dependency !in newState.observed) {
                     dependency.observers.remove(this)
                     true
                 } else {
@@ -28,7 +32,7 @@ sealed class ReactiveObserver {
                 }
             }
 
-            newState.forEach { dependency ->
+            newState.observed.forEach { dependency ->
                 if (observing.add(dependency)) {
                     dependency.observers.add(this)
                 }

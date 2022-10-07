@@ -9,7 +9,7 @@ class Atom {
 
     fun isObserved() = observers.isNotEmpty()
     fun reportObserved() {
-        observeBlock.get()?.add(this)
+        observeBlock.get()?.observed?.add(this)
     }
     fun reportChanged() {
         val batch = changeBatch.get()

@@ -185,6 +185,26 @@ function reconcileChildren(
             finalChildren.push(newer)
             replacementIndex += 1;
         } else {
+            //The server does not track the position of most directives, except keep, so they are specially handled
+            //for matching
+            const newerDirective = newer instanceof Component ? null : asShadeDirective(newer)
+            const originalIsDirective = original instanceof Node && asShadeDirective(original) != null
+            if(newer instanceof Node && newerDirective != null && !(newerDirective instanceof Keep)){
+                if(originalIsDirective){
+                    finalChildren.push(reconcileNodes(original as Node, newer))
+                    originalIndex += 1
+                } else {
+                    finalChildren.push(newer)
+                    checkDirectiveAdd(newer)
+                }
+                replacementIndex += 1
+                continue
+            } else if (originalIsDirective){
+                checkDirectiveRemove(original as Node)
+                originalIndex += 1
+                continue
+            }
+
             const newerKey = getKey(newer);
             if(newerKey != null){
                 if(original){
@@ -208,7 +228,7 @@ function reconcileChildren(
                 }
             }
 
-            const newerDirective = newer instanceof Component ? null : asShadeDirective(newer)
+
             if(original && original instanceof Component && newerDirective instanceof Keep && (newerDirective.id == original.id() || newerKey)){
                 add = asNodes(original);
             } else {

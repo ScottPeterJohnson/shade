@@ -8,6 +8,7 @@ import net.justmachinery.shade.routing.base.UrlInfo
 import org.eclipse.jetty.websocket.api.Session
 import java.awt.Desktop
 import java.net.URI
+import java.time.Duration
 import java.util.*
 
 
@@ -24,6 +25,10 @@ fun main(){
     //This is a webserver specific shim that passes messages and events to Shade
     val sessions = Collections.synchronizedMap(mutableMapOf<Session, ShadeRoot.MessageHandler>())
     app.ws("/shade"){
+        it.onConnect {
+            //Connected clients ping every minute
+            it.session.idleTimeout = Duration.ofMinutes(2)
+        }
         it.onMessage { ws ->
             sessions.getOrPut(ws.session){
                 root.handler(

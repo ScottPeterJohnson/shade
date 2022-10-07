@@ -46,7 +46,7 @@ export function connectSocket(){
             localStorage.removeItem("shade_last_error_reload");
         } else {
             localStorage.setItem("shade_error_reload", "true");
-            location.reload(true);
+            location.reload();
         }
     }
     socket.onclose = function(evt) {
@@ -80,7 +80,7 @@ export function sendMessage(id : string, msg : string|undefined|null) {
     }
 }
 
-export function sendIfError(error : object, tag?: string, evalText ?: string){
+export function sendIfError(error : unknown, tag?: string, evalText ?: string){
     const data = error instanceof Error ? {
         name: error.name,
         jsMessage: error.message,

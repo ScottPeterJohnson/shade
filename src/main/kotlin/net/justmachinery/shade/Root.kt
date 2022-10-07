@@ -1,5 +1,7 @@
 package net.justmachinery.shade
 
+import com.google.common.cache.CacheBuilder
+import com.google.common.cache.CacheLoader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
@@ -11,6 +13,7 @@ import net.justmachinery.shade.render.shadeToString
 import net.justmachinery.shade.render.shadeToWriter
 import net.justmachinery.shade.utility.*
 import java.io.Writer
+import java.lang.reflect.Constructor
 import java.time.Duration
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
@@ -78,7 +81,8 @@ class ShadeRoot(
             clazz.isSubclassOf(Component::class) || clazz.isSubclassOf(
                 ComponentInTag::class) -> {
                 componentPassProps.withValue(props){
-                    clazz.java.getDeclaredConstructor().also { it.isAccessible = true }.newInstance()
+                    @Suppress("UNCHECKED_CAST")
+                    (componentConstructorCache[clazz.java].newInstance()) as AdvancedComponent<T,RenderIn>
                 }
             }
             else -> {
@@ -253,6 +257,14 @@ class ShadeRoot(
         }
     }
 }
+
+private val componentConstructorCache = CacheBuilder.newBuilder().build(object : CacheLoader<Class<*>, Constructor<*>>(){
+    override fun load(key: Class<*>): Constructor<*> {
+        val constructor = key.getDeclaredConstructor()
+        constructor.isAccessible = true
+        return constructor
+    }
+})
 
 sealed class AddScriptStrategy {
     data class Inline(val production : Boolean) : AddScriptStrategy()

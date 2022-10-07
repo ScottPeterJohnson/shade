@@ -15,7 +15,11 @@ import org.slf4j.MDC
 
 @HtmlTagMarker
 fun CommonAttributeGroupFacade.withStyle(builder: CssBuilder.() -> Unit) {
-    this.style = CssBuilder().apply(builder).toString().trim()
+    if(!this.attributes.containsKey("style")){
+        this.style = CssBuilder().apply(builder).toString().trim()
+    } else {
+        this.style = "${this.style};${CssBuilder().apply(builder).toString().trim()}"
+    }
 }
 
 
@@ -162,16 +166,6 @@ sealed class ErrorOr<T> {
     fun unwrap() : T = when(this){
         is Error -> throw this.exception
         is Result -> this.result
-    }
-}
-
-fun applyWrappers(wrappers : List<(()->Unit)->Unit>, cb : ()->Unit){
-    if(wrappers.isEmpty()){
-        cb()
-    } else {
-        (wrappers.first()){
-            applyWrappers(wrappers.drop(1), cb)
-        }
     }
 }
 
