@@ -10,7 +10,7 @@ import {
     Keep,
 } from "./directives";
 import {AttributeNames, componentIdPrefix} from "./constants";
-import {onAttributesSetFromSource} from "./attributes";
+import {applyAttributeValue, onAttributesSetFromSource} from "./attributes";
 
 export function reconcile(targetId : number, html : string){
     changingDirectives(()=>{
@@ -77,7 +77,7 @@ function reconcileNodes(original : Node, newer : Node) : Node {
             for(let i=0;i<original.attributes.length;i++){
                 const attribute = original.attributes[i].name;
                 if(!newer.hasAttribute(attribute)){
-                    original.removeAttribute(attribute);
+                    applyAttributeValue(original, attribute, null)
                     changed = true;
                 }
             }
@@ -86,7 +86,7 @@ function reconcileNodes(original : Node, newer : Node) : Node {
                 const olderAttr = original.getAttribute(attribute);
                 const newerAttr = newer.getAttribute(attribute)!
                 if(olderAttr != newerAttr){
-                    original.setAttribute(attribute, newerAttr);
+                    applyAttributeValue(original, attribute, newerAttr)
                     changed = true;
                 }
             }

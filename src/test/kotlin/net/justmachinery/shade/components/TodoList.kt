@@ -39,20 +39,17 @@ class TodoListSection : Component<Unit>() {
                 type = InputType.text
             }
 
-            @Suppress("ConstantConditionIf")
-            if(false){
-                //Thematically, the boundInput is equivalent to this:
-                input {
-                    value = newTaskName.value
-                    onValueChange {
-                        newTaskName.set(it)
-                    }
-                    type = InputType.text
+            //The boundInput is semantically equivalent to this:
+            input {
+                value = newTaskName.value
+                onValueInput {
+                    newTaskName.set(it)
                 }
-                //However, this won't actually change what the textbox says if the observable is set to something the
-                //user didn't input! This is because in HTML, the value is only set when the input is created.
-                //boundInput takes care of this and should be generally preferred.
+                type = InputType.text
             }
+            //Note that in HTML, the "value" attribute normally only sets the "value" when the input is first created.
+            //Shade will however manually change it on update for consistency.
+            //A boundInput will be more efficient about changes, but directly using inputs should also work.
 
             button {
                 onClick {

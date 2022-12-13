@@ -8,6 +8,8 @@ interface EventPrevious {
     target: HTMLElement
 }
 
+export let suppressEventFiring = {suppress: false};
+
 const eventPrevious = Symbol()
 interface HasPrevious extends HTMLElement {
     [eventPrevious]?: EventPrevious
@@ -19,6 +21,7 @@ export function setupEventHandler(directive : EventHandler, info : AddedTargetIn
     const suffix = directive.suffix ? `;\n${directive.suffix}` : ""
     const script = `${prefix}${SocketScopeNames.sendMessage}(${directive.callbackId}${data})${suffix}`
     const listener : EventListener = function(this : EventListener, e : Event){
+        if(suppressEventFiring.suppress){ return }
         const scope = makeEvalScope({
             event: e,
             e: e,

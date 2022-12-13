@@ -1,5 +1,6 @@
 import {AddedTargetInfo, asShadeDirective, SetAttribute} from "./directives";
 import {AttributeNames, DirectiveType, scriptTypeSignifier} from "./constants";
+import {suppressEventFiring} from "./events";
 
 
 //We need some way of storing the original values of an attribute before an attribute directive was applied,
@@ -62,14 +63,14 @@ function updateAttributeDirectives(target : HTMLElement){
         const last = directives[directives.length - 1]!!
 
         noteOriginalAttribute(target, last.name);
-        apply(target, last.name, last.value);
+        applyAttributeValue(target, last.name, last.value);
     }
 
     //Finally, restore the original values for any attributes that no longer have directives
     const originals = (target as OriginalAttributeValueDom)[attributeOriginalValues] || {};
     for(let original of Object.getOwnPropertyNames(originals)){
         if(!byAttributeName[original]){
-            apply(target, original, originals[original]);
+            applyAttributeValue(target, original, originals[original]);
             delete originals[original];
         }
     }
@@ -103,10 +104,32 @@ export function noteAttributeDirectiveRemove(element : HTMLElement){
     }
 }
 
-function apply(target : HTMLElement, name : string, value : string|null){
+export function applyAttributeValue(target : HTMLElement, name : string, value : string|null){
     if(value == null){
         target.removeAttribute(name);
     } else {
         target.setAttribute(name, value)
     }
+    if(target instanceof HTMLInputElement && (name == "value" || name == "checked")){
+        //These special values have effects only on the "initial" insertion of a DOM object;
+        //for consistency we always apply these effects
+        if(name == "value" && target.value != value){
+            suppressChangeListeners(target, ()=>{
+                target.value = value ?? ""
+            })
+        } else if(name == "checked" && target.checked != (value != null)){
+            suppressChangeListeners(target, ()=>{
+                target.checked = value != null
+            })
+        }
+    }
+}
+
+function suppressChangeListeners(target : HTMLInputElement, cb : ()=>void){
+    suppressEventFiring.suppress = true
+    const oldOnChange = target.onchange
+    target.onchange = null
+    cb()
+    target.onchange = oldOnChange
+    suppressEventFiring.suppress = false
 }

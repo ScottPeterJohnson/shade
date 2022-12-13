@@ -1,9 +1,6 @@
 package net.justmachinery.shade.components
 
-import kotlinx.html.HtmlBlockTag
-import kotlinx.html.button
-import kotlinx.html.h2
-import kotlinx.html.p
+import kotlinx.html.*
 import net.justmachinery.futility.getSet
 import net.justmachinery.futility.lambdas.EqLambda
 import net.justmachinery.shade.component.Component
@@ -15,6 +12,7 @@ class BoundInputTest : Component<Unit>() {
         var noEAllowed by obs("")
         var allCaps by obs("")
         var checkbox by obs(false)
+        var nonboundCheckbox by obs(false)
         enum class Selected {
             FIRST,
             SECOND,
@@ -65,6 +63,19 @@ class BoundInputTest : Component<Unit>() {
         p { +"This checkbox is ${if(state.checkbox) "checked" else "not checked"}" }
         boundCheckbox(state::checkbox.getSet){
             +"Checked"
+        }
+        p {
+            +"This is a non-bound checkbox whose checked attribute is toggled"
+        }
+        input(type = InputType.checkBox) {
+            onChange = "event.preventDefault()"
+            checked = state.nonboundCheckbox
+        }
+        button {
+            onClick {
+                state.nonboundCheckbox = !state.nonboundCheckbox
+            }
+            +"Toggle"
         }
         p { +"${state.selected} is selected" }
         add(Select.Props(

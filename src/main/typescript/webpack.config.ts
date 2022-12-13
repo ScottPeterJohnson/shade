@@ -15,7 +15,7 @@ module.exports = (env : any, argv : any) => ({
     resolve: {
         extensions: [ '.tsx', '.ts', '.js' ],
     },
-    devtool: argv.mode != 'development' ? 'false' : 'inline-source-map',
+    devtool: argv.mode != 'development' ? false : 'inline-source-map',
     output: {
         filename: argv.mode != 'development' ? 'shade-bundle-min.js' : 'shade-bundle.js',
         path: path.resolve(__dirname, '../resources/js')
