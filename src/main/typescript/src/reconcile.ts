@@ -167,10 +167,7 @@ function reconcileChildren(
     while(originalIndex < originals.length || replacementIndex < replacements.length){
         let original : NodeOrComponent|undefined = originals[originalIndex];
         const newer : NodeOrComponent|undefined = replacements[replacementIndex];
-        //Skip any keyed originals; they will be looked up by key
-        if(original && getKey(original) != null){
-            originalIndex += 1;
-        } else if(original && !newer) {
+        if(original && !newer) {
             /* Implicit remove */
             for(let node of asNodes(original)){
                 checkDirectiveRemove(node);
@@ -207,10 +204,7 @@ function reconcileChildren(
 
             const newerKey = getKey(newer);
             if(newerKey != null){
-                if(original){
-                    //We'll match this unkeyed original again on something without a key
-                    originalIndex -= 1;
-                }
+                //We'll directly match to the original by key, ignoring what's usually at this position
                 original = originalKeys[newerKey]?.pop();
             }
 

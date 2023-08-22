@@ -16,6 +16,7 @@ import net.justmachinery.shade.state.obs
 class KeyRerenderTest : Component<Unit>() {
     //Some keys are duplicates; this is not recommended and is here to test what happens.
     var numbersList by obs((0 until 10).toList() + listOf(1,3,3,3,1,5))
+    var addKey : Boolean by obs(false)
     override fun HtmlBlockTag.render() {
         h2 { +"Rerendering by key" }
 
@@ -30,6 +31,23 @@ class KeyRerenderTest : Component<Unit>() {
                 numbersList = sort
             }
             +"Shuffle list"
+        }
+        h2 { +"Key render order" }
+        button {
+            onClick { addKey = !addKey }
+            +"Toggle key"
+        }
+        div {
+            if(addKey){
+                add(KeyRerenderTestShow::class, 1, key = (1).toString())
+            } else {
+                add(KeyRerenderTestShow::class, 1)
+            }
+            render {
+                div {
+                    +"Aftertext"
+                }
+            }
         }
     }
 }
