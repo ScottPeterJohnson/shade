@@ -6,6 +6,7 @@ import kotlinx.html.*
 import net.justmachinery.shade._app
 import net.justmachinery.shade.component.Component
 import net.justmachinery.shade.component.MountingContext
+import net.justmachinery.shade.extraMessageDelay
 import net.justmachinery.shade.newBackgroundColorOnRerender
 import net.justmachinery.shade.root
 import net.justmachinery.shade.routing.base.UrlInfo
@@ -101,7 +102,7 @@ class RootPageComponent : Component<Unit>(){
                     onValueChange {
                         val delay = it.toLong()
                         //Halve the delay (it's a round trip)
-                        client.root.simulateExtraDelay = if(delay == 0L) null else Duration.of(delay/2, ChronoUnit.MILLIS)
+                        extraMessageDelay = if(delay == 0L) null else Duration.of(delay/2, ChronoUnit.MILLIS)
                     }
                 }
             }

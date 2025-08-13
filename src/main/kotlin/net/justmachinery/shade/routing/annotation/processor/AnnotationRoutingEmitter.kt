@@ -1,19 +1,21 @@
 package net.justmachinery.shade.routing.annotation.processor
 
+import com.google.devtools.ksp.processing.Dependencies
+import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
 import com.squareup.kotlinpoet.*
+import com.squareup.kotlinpoet.ksp.writeTo
 import kotlinx.html.Tag
 import net.justmachinery.futility.ErrorOr
 import net.justmachinery.shade.component.AdvancedComponent
 import net.justmachinery.shade.routing.annotation.*
 import net.justmachinery.shade.routing.base.WithRouting
 import net.justmachinery.shade.state.ObservableValue
-import java.io.File
 import kotlin.reflect.KClass
 
 
-internal class AnnotationRoutingEmitter(val routeData: RouteData) {
+internal class AnnotationRoutingEmitter(val environment: SymbolProcessorEnvironment, val routeData: RouteData) {
     val builder = FileSpec.builder("net.justmachinery.shade.generated.routing", routeData.className.simpleName + "Routing")
-    fun write(outputDirectory : File){
+    fun write(){
 
         outputRouterCallbackInterface(routeData, true)
         flushAddedClasses()
@@ -22,7 +24,8 @@ internal class AnnotationRoutingEmitter(val routeData: RouteData) {
         outputRoutingBuilderClasses(routeData)
         flushAddedClasses()
 
-        builder.build().writeTo(outputDirectory)
+        val spec = builder.build()
+        spec.writeTo(environment.codeGenerator, Dependencies(aggregating = false, routeData.originatingFile))
     }
 
     private fun outputRouterCallbackInterface(data: RouteData, topLevel : Boolean){

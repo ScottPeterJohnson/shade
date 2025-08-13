@@ -106,9 +106,9 @@ This is a highly experimental library. The core is simple enough to be functiona
 
 ## Usage
 ### Routing
-Shade does include support for routing, both basic and an annotation-based generator that
+Shade does include support for routing, both basic and an annotation-based KSP code generator that
 allows for both typesafe URL construction and navigation.
 
-To use annotation-based routing, enable kapt then add `kapt "net.justmachinery:shade:VERSION"` to your gradle dependencies. Then, annotate an instance of `RoutingSpecBase` with `@GenerateRouting`.
+To use annotation-based routing, enable KSP then add `ksp("net.justmachinery:shade:VERSION)"` to your gradle dependencies. Then, annotate an instance of `RoutingSpecBase` with `@GenerateRouting`.
 
 See the included RoutingTest for a sample.

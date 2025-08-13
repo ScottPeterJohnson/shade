@@ -3,7 +3,6 @@ package net.justmachinery.shade
 import com.google.common.cache.CacheBuilder
 import com.google.common.cache.CacheLoader
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.html.*
@@ -18,7 +17,7 @@ import net.justmachinery.futility.withValue
 import net.justmachinery.shade.component.*
 import net.justmachinery.shade.render.shadeToString
 import net.justmachinery.shade.render.shadeToWriter
-import net.justmachinery.shade.utility.*
+import net.justmachinery.shade.utility.gson
 import java.io.Writer
 import java.lang.reflect.Constructor
 import java.time.Duration
@@ -50,11 +49,7 @@ class ShadeRoot(
     val onUncaughtJavascriptException : (Client, JavascriptException)->Unit = { client, err ->
         logger.error(err){ "Uncaught JS exception for client ${client.clientId}" }
     },
-    /**
-     * For testing purposes.
-     * An extra delay to add before passing receiving or sending any messages to the client, to simulate poor connections.
-     */
-    var simulateExtraDelay : Duration? = null,
+
 
     /**
      * Base context used to launch all coroutines by default.
@@ -184,14 +179,7 @@ class ShadeRoot(
         private var clientData : Client? = null
 
         internal fun sendMessage(errorTag : String?, message : String){
-            if (simulateExtraDelay == null) {
-                send("${errorTag ?: ""}|$message")
-            } else {
-                GlobalScope.launch(context){
-                    delay(simulateExtraDelay!!.toMillis())
-                    send("${errorTag ?: ""}|$message")
-                }
-            }
+            send("${errorTag ?: ""}|$message")
         }
         /**
          * This should be called by your web framework when a websocket receives a message.
@@ -199,14 +187,7 @@ class ShadeRoot(
          */
         fun onMessage(message : String){
             if(message.isEmpty()) return
-            if (simulateExtraDelay == null) {
-                processMessage(message)
-            } else {
-                GlobalScope.launch(context){
-                    delay(simulateExtraDelay!!.toMillis())
-                    processMessage(message)
-                }
-            }
+            processMessage(message)
         }
 
         private fun processMessage(message : String){
@@ -215,7 +196,6 @@ class ShadeRoot(
                     logger.trace { "Message received: ${message.ellipsizeAfter(200)}" }
                     if(clientData == null){
                         try {
-
                             clientId = UUID.fromString(message)!!
                         } catch(t : IllegalArgumentException){
                             logger.info { "Not a UUID: ${message.ellipsizeAfter(200)}" }

@@ -1,5 +1,6 @@
 package net.justmachinery.shade.routing.annotation.processor
 
+import com.google.devtools.ksp.symbol.KSFile
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.TypeName
 
@@ -15,6 +16,7 @@ annotation class GenerateRouting
 
 
 internal data class RouteData(
+    val originatingFile : KSFile,
     val className: ClassName,
     val pages : List<PageData>,
     val paths : List<PathRouteData>,

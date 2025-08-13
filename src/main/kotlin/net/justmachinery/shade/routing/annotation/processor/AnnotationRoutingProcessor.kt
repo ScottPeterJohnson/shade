@@ -1,201 +1,147 @@
 package net.justmachinery.shade.routing.annotation.processor
 
-import com.squareup.kotlinpoet.*
-import net.justmachinery.shade.routing.annotation.*
-import java.io.File
-import javax.annotation.processing.*
-import javax.lang.model.SourceVersion
-import javax.lang.model.element.Element
-import javax.lang.model.element.TypeElement
-import javax.lang.model.type.DeclaredType
-import javax.lang.model.type.TypeMirror
-import javax.lang.model.util.ElementFilter
-import javax.tools.Diagnostic
-import kotlin.reflect.KClass
-import kotlin.reflect.jvm.internal.impl.builtins.jvm.JavaToKotlinClassMap
-import kotlin.reflect.jvm.internal.impl.name.FqName
+import com.google.devtools.ksp.getAllSuperTypes
+import com.google.devtools.ksp.processing.Resolver
+import com.google.devtools.ksp.processing.SymbolProcessor
+import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
+import com.google.devtools.ksp.processing.SymbolProcessorProvider
+import com.google.devtools.ksp.symbol.KSAnnotated
+import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSNode
+import com.google.devtools.ksp.symbol.KSType
+import com.squareup.kotlinpoet.TypeName
+import com.squareup.kotlinpoet.ksp.toClassName
+import net.justmachinery.shade.routing.annotation.NotFound
+import net.justmachinery.shade.routing.annotation.QueryParam
+import net.justmachinery.shade.routing.annotation.RoutedPage
+import net.justmachinery.shade.routing.annotation.RoutedPath
 
 
-const val KAPT_KOTLIN_GENERATED_OPTION_NAME = "kapt.kotlin.generated"
+class AnnotationRoutingProcessorProvider : SymbolProcessorProvider {
+    override fun create(environment: SymbolProcessorEnvironment) = AnnotationRoutingProcessor(environment)
+}
 
-
-
-@SupportedSourceVersion(SourceVersion.RELEASE_11)
-@SupportedAnnotationTypes(
-    "net.justmachinery.shade.routing.annotation.processor.GenerateRouting"
-)
-@SupportedOptions(KAPT_KOTLIN_GENERATED_OPTION_NAME)
-class AnnotationRoutingProcessor : AbstractProcessor() {
-    override fun process(annotations: MutableSet<out TypeElement>?, roundEnv: RoundEnvironment): Boolean {
-        val baseRoutes = roundEnv.getElementsAnnotatedWith(GenerateRouting::class.java)
-
-        val kaptKotlinGeneratedDir = File(processingEnv.options[KAPT_KOTLIN_GENERATED_OPTION_NAME] ?: run {
-            processingEnv.messager.printMessage(Diagnostic.Kind.ERROR, "Can't find the target directory for generated Kotlin files.")
-            return false
-        })
-
-        val data = baseRoutes.map { element ->
-            buildRoutingData(element)
-        }
-
-        data.forEach { route ->
-            AnnotationRoutingEmitter(route).write(kaptKotlinGeneratedDir)
-        }
-
-        return true
+class AnnotationRoutingProcessor(
+    private val environment: SymbolProcessorEnvironment
+) : SymbolProcessor {
+    override fun process(resolver: Resolver): List<KSAnnotated> {
+        WithResolver(resolver).process()
+        return emptyList()
     }
 
-    private fun buildRoutingData(
-        element : Element
-    ) : RouteData {
-        val fields = ElementFilter.fieldsIn(element.enclosedElements)
+    inner class WithResolver(private val resolver : Resolver){
+        val routedPath = resolver.getClassDeclarationByName(resolver.getKSNameFromString(RoutedPath::class.qualifiedName!!))!!.asStarProjectedType()
+        val routedPage = resolver.getClassDeclarationByName(resolver.getKSNameFromString(RoutedPage::class.qualifiedName!!))!!.asStarProjectedType()
+        val queryParam = resolver.getClassDeclarationByName(resolver.getKSNameFromString(QueryParam::class.qualifiedName!!))!!.asStarProjectedType()
+        val notFound = resolver.getClassDeclarationByName(resolver.getKSNameFromString(NotFound::class.qualifiedName!!))!!.asStarProjectedType()
 
-        val pages = mutableListOf<PageData>()
-        val paths = mutableListOf<PathRouteData>()
-        val queryParameters = mutableListOf<QueryParameterData>()
-        val notFoundHandlers = mutableListOf<NotFoundHandler>()
+        fun process(){
+            val routings = resolver.getSymbolsWithAnnotation(GenerateRouting::class.java.canonicalName).filterIsInstance(KSClassDeclaration::class.java)
 
-        fields.forEach { field ->
-            val fieldClazz = field.asType().extractPathContentType()
-            if(fieldClazz != null){
-                val result = buildRoutingData(fieldClazz)
-                paths.add(
-                    PathRouteData(
-                        data = result,
-                        name = field.simpleName.toString()
+            val data = routings.map { element ->
+                buildRoutingData(element)
+            }
+
+            data.forEach { route ->
+                AnnotationRoutingEmitter(environment, route).write()
+            }
+        }
+
+
+        private fun buildRoutingData(
+            element : KSClassDeclaration
+        ) : RouteData {
+            val pages = mutableListOf<PageData>()
+            val paths = mutableListOf<PathRouteData>()
+            val queryParameters = mutableListOf<QueryParameterData>()
+            val notFoundHandlers = mutableListOf<NotFoundHandler>()
+
+            for (property in element.getAllProperties()) {
+                val type = property.type.resolve()
+                if (routedPath.isAssignableFrom(type)) {
+                    val subRouter = type.arguments[0].type!!.resolve()
+                    if(subRouter.declaration !is KSClassDeclaration){
+                        environment.logger.error("Must be a concrete class", property)
+                        continue
+                    }
+                    val result = buildRoutingData(subRouter.declaration as KSClassDeclaration)
+                    paths.add(PathRouteData(result, property.simpleName.asString()))
+                } else if (routedPage.isAssignableFrom(type)) {
+                    val queryParamSpec = type.arguments[0].type!!.resolve()
+                    pages.add(
+                        PageData(
+                            name = property.simpleName.asString(),
+                            queryParameters = extractQueryParameters(queryParamSpec, property)
+                        )
                     )
-                )
-            }
-            if(field.asType().isRoutingPage()){
-                val queryParamSpec = field.asType().extractQueryParameterSpecFromPageType()
-                pages.add(PageData(
-                    name = field.simpleName.toString(),
-                    queryParameters = queryParamSpec?.let { extractQueryParameters(it) } ?: emptyList()
-                ))
-            }
-            if(field.asType().isQueryParameter()){
-                queryParameters.add(
-                    QueryParameterData(
-                        name = field.simpleName.toString(),
-                        type = field.asType().extractQueryParameterType()!!
+                } else if (notFound.isAssignableFrom(type)) {
+                    notFoundHandlers.add(
+                        NotFoundHandler(
+                            property.simpleName.asString()
+                        )
                     )
-                )
-            }
-            if(field.asType().isNotFound()){
-                notFoundHandlers.add(
-                    NotFoundHandler(
-                        field.simpleName.toString()
-                    )
-                )
-            }
-        }
-        return RouteData(
-            className = ClassName.bestGuess(element.toString()),
-            pages = pages,
-            paths = paths,
-            queryParameters = queryParameters,
-            notFoundHandlers = notFoundHandlers
-        )
-    }
-
-    private fun extractQueryParameters(target : Element) : List<QueryParameterData> {
-        val parameters = mutableListOf<QueryParameterData>()
-        val fields = ElementFilter.fieldsIn(target.enclosedElements)
-        fields.forEach { field ->
-            if(field.asType().isQueryParameter()){
-                parameters.add(
-                    QueryParameterData(
-                        name = field.simpleName.toString(),
-                        type = field.asType().extractQueryParameterType()!!
-                    )
-                )
-            }
-        }
-        return parameters
-    }
-
-    private fun TypeMirror.isNotFound() : Boolean {
-        return this.findSuperclass(NotFound::class) != null
-    }
-    private fun TypeMirror.isQueryParameter() : Boolean {
-        return this.findSuperclass(QueryParam::class) != null
-    }
-    private fun TypeMirror.extractQueryParameterType() : TypeName? {
-        return this.findSuperclass(QueryParam::class)?.let {
-            var result = (it.typeArguments[0] as DeclaredType).asTypeName()
-            if(this.findSuperclass(OptionalParam::class) != null){
-                result = result.copy(nullable = true)
-            }
-            result.javaToKotlinType()
-        }
-    }
-
-    private fun TypeMirror.isRoutingPage() : Boolean {
-        return this.findSuperclass(RoutedPage::class) != null
-    }
-    private fun TypeMirror.extractQueryParameterSpecFromPageType() : Element? {
-        return this.findSuperclass(RoutedPage::class)?.let { (it.typeArguments[0] as DeclaredType).asElement() }
-    }
-    private fun TypeMirror.extractPathContentType() : Element? {
-        return this.findSuperclass(RoutedPath::class)?.let { (it.typeArguments[0] as DeclaredType).asElement() }
-    }
-    private fun TypeMirror.findSuperclass(target : KClass<*>) : DeclaredType? {
-        val clazz = (this as? DeclaredType) ?: return null
-        val targetAsType = target.typeElement().erasure()
-        return if(typeUtils.isSameType(clazz.erasure(), targetAsType)){
-            clazz
-        } else {
-            typeUtils.directSupertypes(clazz).asSequence().mapNotNull { it.findSuperclass(target) }.firstOrNull()
-        }
-    }
-
-    private val typeUtils get() = processingEnv.typeUtils
-    private fun KClass<*>.typeElement() = processingEnv.elementUtils.getTypeElement(qualifiedName).asType()
-    private fun TypeMirror.erasure() = typeUtils.erasure(this)
-
-    //TODO: might possibly need to read the metadata and do stupid things to get the right Kotlin types
-    /*private fun metadata(element : Element){
-        val metadata = element.getAnnotation(Metadata::class.java)
-        val header = KotlinClassHeader(
-            kind = metadata.kind,
-            metadataVersion = metadata.metadataVersion,
-            bytecodeVersion = metadata.bytecodeVersion,
-            data1 = metadata.data1,
-            data2 = metadata.data2,
-            extraString = metadata.extraString,
-            packageName = metadata.packageName,
-            extraInt = metadata.extraInt
-        )
-        val meta = KotlinClassMetadata.read(header)!! as KotlinClassMetadata.Class
-        ClassName.bestGuess(meta.toKmClass().name)
-        meta.toKmClass().name
-        meta.toKmClass().properties.forEach { property ->
-            property.name
-            property.returnType
-        }
-    }*/
-
-    //For now this seems to work:
-    private fun TypeName.javaToKotlinType(): TypeName {
-        return when (this) {
-            is ParameterizedTypeName -> {
-                ParameterizedTypeName.run {
-                    (rawType.javaToKotlinType() as ClassName).parameterizedBy(
-                        *(typeArguments.map { it.javaToKotlinType() }.toTypedArray())
-                    )
+                } else if (queryParam.isAssignableFrom(type)){
+                    val paramType = extractQueryParameter(type, property)
+                    if(paramType != null){
+                        queryParameters.add(QueryParameterData(
+                            name = property.simpleName.asString(),
+                            type = paramType
+                        ))
+                    }
                 }
             }
-            is WildcardTypeName -> {
-                outTypes[0].javaToKotlinType()
+            return RouteData(
+                originatingFile = element.containingFile!!,
+                className = element.toClassName(),
+                pages = pages,
+                paths = paths,
+                queryParameters = queryParameters,
+                notFoundHandlers = notFoundHandlers
+            )
+        }
+
+
+        private fun extractQueryParameter(type : KSType, reportNode : KSNode) : TypeName? {
+            val decl = (type.declaration as? KSClassDeclaration)
+            if(decl == null){
+                environment.logger.error("Must be a concrete class", reportNode)
+                return null
             }
-            else -> {
-                val className = JavaToKotlinClassMap.INSTANCE.mapJavaToKotlin(FqName(toString()))?.asSingleFqName()?.asString()
-                return if (className == null) {
-                    this
-                } else {
-                    ClassName.bestGuess(className)
+            val superType = decl.getAllSuperTypes().firstOrNull { it.declaration.qualifiedName?.asString() == QueryParam::class.qualifiedName}
+            if(superType == null){
+                environment.logger.error("Must extend only QueryParam ($decl, $superType)", reportNode)
+                return null
+            }
+            val singleArgument = superType.arguments.singleOrNull()?.type?.resolve()?.declaration as? KSClassDeclaration
+            if(singleArgument == null){
+                environment.logger.error("Must pass concrete type to QueryParam", reportNode)
+                return null
+            }
+            return singleArgument.toClassName()
+        }
+
+        private fun extractQueryParameters(target : KSType, reportNode: KSNode) : List<QueryParameterData> {
+            val decl = (target.declaration as? KSClassDeclaration)
+            if(decl == null){
+                environment.logger.error("Must be a concrete class", reportNode)
+                return emptyList()
+            }
+
+            val parameters = mutableListOf<QueryParameterData>()
+            for(property in decl.getAllProperties()){
+                val propertyType = property.type.resolve()
+                if(queryParam.isAssignableFrom(propertyType)){
+                    val param = extractQueryParameter(propertyType, property)
+                    if(param != null){
+                        parameters.add(QueryParameterData(
+                            name = property.simpleName.asString(),
+                            type = param
+                        ))
+                    }
                 }
             }
+            return parameters
         }
     }
+
 }

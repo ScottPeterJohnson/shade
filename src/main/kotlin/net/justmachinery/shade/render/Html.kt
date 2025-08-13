@@ -160,10 +160,6 @@ internal class ShadeConsumer<T>(private val downstream : TagConsumer<T>) : TagCo
         processDelayedTag()
         downstream.onTagContentEntity(entity)
     }
-    override fun onTagError(tag: Tag, exception: Throwable) {
-        processDelayedTag()
-        downstream.onTagError(tag, exception)
-    }
     override fun onTagComment(content: CharSequence) {
         processDelayedTag()
         downstream.onTagComment(content)

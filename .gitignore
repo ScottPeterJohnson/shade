@@ -3,4 +3,5 @@ build/
 .idea/
 gradlew.bat
 gradle.properties
-src/main/typescript/node_modules
+**/node_modules
+**/*.js

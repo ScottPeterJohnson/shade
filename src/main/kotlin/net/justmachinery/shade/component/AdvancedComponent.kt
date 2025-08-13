@@ -17,7 +17,7 @@ import kotlin.coroutines.CoroutineContext
  * This is exposed in case you need that.
  */
 abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : ComponentInitData<PropType>) : CoroutineScope, EventHandlers, ComponentRouting, ComponentAdd, ComponentHelpers, ComponentBase {
-    companion object : KLogging()
+    private companion object : KLogging()
 
     private var propsAtom : Atom? = null
     internal var _props : PropType? = null

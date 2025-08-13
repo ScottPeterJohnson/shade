@@ -2,6 +2,9 @@ package net.justmachinery.shade
 
 import io.javalin.Javalin
 import io.javalin.http.Handler
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.html.h2
 import net.justmachinery.shade.components.RootComponent
 import net.justmachinery.shade.routing.base.UrlInfo
@@ -30,12 +33,33 @@ fun main(){
             it.session.idleTimeout = Duration.ofMinutes(2)
         }
         it.onMessage { ws ->
-            sessions.getOrPut(ws.session){
+            //Your handler for this can be pretty simple.
+            //Ours has a delay simulation testing feature you probably don't need.
+            val session = sessions.getOrPut(ws.session){
                 root.handler(
-                    send = { ws.send(it) },
-                    disconnect = { ws.session.close() }
+                    send = {
+                        if(extraMessageDelay != null){
+                            GlobalScope.launch {
+                                extraMessageDelay?.let { delay(it.toMillis()) }
+                                ws.send(it)
+                            }
+                        } else {
+                            ws.send(it)
+                        }
+                    },
+                    disconnect = {
+                        ws.session.close()
+                    }
                 )
-            }.onMessage(ws.message())
+            }
+            if(extraMessageDelay != null){
+                GlobalScope.launch {
+                    extraMessageDelay?.let { delay(it.toMillis()) }
+                    session.onMessage(ws.message())
+                }
+            } else {
+                session.onMessage(ws.message())
+            }
         }
         it.onClose {
             sessions.remove(it.session)?.onDisconnect()
@@ -72,10 +96,11 @@ fun main(){
     }
 }
 
+
 //You probably shouldn't pass things around globally in a production project (use dependency injection),
 // but this was done here for simplicity
 var _app : Javalin? = null
-
+var extraMessageDelay : Duration? = null
 
 val root = ShadeRoot(
     endpoint = "/shade",
