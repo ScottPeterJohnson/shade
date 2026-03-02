@@ -103,7 +103,7 @@ class LoadStyle(@Language("CSS") val css : String){
             //language=JavaScript
             client.executeScript("""
                 const css = document.createElement("style");
-                css.innerText = ${gson.toJson(css)};
+                css.textContent = ${gson.toJson(css)};
                 document.head.appendChild(css);
             """.trimIndent())
         }

@@ -19,7 +19,10 @@ import net.justmachinery.shade.utility.*
 class LoadScriptTest : Component<Unit>() {
     var phoneNumber by observable<String?>("+15555551234")
     companion object {
-        val testStyle = LoadStyle(".style-load-test { color: red }")
+        val testStyle = LoadStyle("""
+            .style-load-test { color: red }
+            .style-load-test-2 { color: blue }
+            """.trimIndent())
     }
 
     override fun MountingContext.mounted() {

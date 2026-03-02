@@ -75,6 +75,7 @@ private fun scriptDirectiveAttributes(
 internal class ShadeConsumer<T>(private val downstream : TagConsumer<T>) : TagConsumer<T> {
     class TagStackEntry(val tag: Tag){
         val deferredDirectives = mutableListOf<Map<String,String>>()
+        override fun toString() = tag.tagName
     }
     private val tagStack = Stack<TagStackEntry>()
 
