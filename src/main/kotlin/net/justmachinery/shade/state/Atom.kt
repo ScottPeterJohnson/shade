@@ -12,21 +12,6 @@ class Atom {
         observeBlock.get()?.observed?.add(this)
     }
     fun reportChanged() {
-        val batch = changeBatch.get()
-        when {
-            batch == null -> {
-                runChangeBatch(ChangeBatchChangePolicy.ALLOWED) {
-                    changeBatch.get().changes.add(
-                        this
-                    )
-                }
-            }
-            batch.changePolicy == ChangeBatchChangePolicy.DISALLOWED -> {
-                throw IllegalStateException("Cannot change state inside render")
-            }
-            else -> {
-                batch.changes.add(this)
-            }
-        }
+        ChangeBatch.addToOrStart(this)
     }
 }

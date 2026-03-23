@@ -25,7 +25,7 @@ fun <T> rivObservable(block: () -> T) =
 /**
  * Creates a block that runs now and whenever its dependencies change.
  */
-fun reaction(block: () -> Unit) = Reaction(block)
+fun reaction(block: () -> Unit) = Reaction(block).apply { run() }
 
 /**
  * Runs a block in a change batch, so that all of its changes are only visible at the end.

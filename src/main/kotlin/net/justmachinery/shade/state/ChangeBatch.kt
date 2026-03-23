@@ -10,9 +10,28 @@ import kotlin.coroutines.CoroutineContext
 internal val changeBatch = ThreadLocal<ChangeBatch>()
 
 internal class ChangeBatch(
-    var changePolicy: ChangeBatchChangePolicy,
+    var changePolicy : ChangeBatchChangePolicy,
     val changes : MutableSet<Atom>
-)
+){
+    companion object {
+        internal fun addToOrStart(atom : Atom){
+            val batch = changeBatch.get()
+            when {
+                batch == null -> {
+                    runChangeBatch(ChangeBatchChangePolicy.ALLOWED) {
+                        changeBatch.get().changes.add(atom)
+                    }
+                }
+                batch.changePolicy == ChangeBatchChangePolicy.DISALLOWED -> {
+                    throw IllegalStateException("Cannot change state inside render")
+                }
+                else -> {
+                    batch.changes.add(atom)
+                }
+            }
+        }
+    }
+}
 
 internal enum class ChangeBatchChangePolicy {
     DISALLOWED,
@@ -58,55 +77,7 @@ internal sealed class StartChangeBatchResult : Closeable {
     data class New(val batch: ChangeBatch) : StartChangeBatchResult() {
         override fun close() {
             try {
-                val changes = batch.changes
-                if (changes.isNotEmpty()) {
-                    val renders =
-                        Sets.newIdentityHashSet<Render>()
-
-                    while(changes.isNotEmpty()){
-                        //1. Find all potentially dirtied nodes
-                        val dirtied =
-                            findAllPotentiallyDirtyNodes(changes.asSequence())
-                        changes.clear()
-
-                        //2. Topologically sort them
-                        val sorted = topologicalSort(dirtied)
-
-                        //3. Re-evaluate them in that order, checking that their dependencies Actually Changed
-                        //First, all computed values recompute
-                        sorted.observers.asSequence().filterIsInstance(ComputedValue::class.java).forEach {
-                            val changed = if(sorted.staleDependencyCount[it]!! > 0){
-                                it.computeAndCheckChange()
-                            } else {
-                                false
-                            }
-                            if(!changed){
-                                it.observers.forEach { subObs ->
-                                    sorted.staleDependencyCount.compute(subObs) { _, value -> value!! - 1 }
-                                }
-                            }
-                        }
-                        //Next, all actions trigger
-                        sorted.observers.asSequence().filterIsInstance(Reaction::class.java).forEach {
-                            if(sorted.staleDependencyCount[it]!! > 0){
-                                it.run()
-                            }
-                        }
-                        //Defer all renders until the end
-                        renders.addAll(sorted.observers.filterIsInstance(Render::class.java).filter { sorted.staleDependencyCount[it]!! > 0 })
-                        //Loop in case actions triggered more changes
-                    }
-                    //Now we can process renders
-                    if(renders.isNotEmpty()){
-                        renders.asSequence().mapNotNull {
-                            val component = it.component
-                            if(component == null){ it.dispose() }
-                            component
-                        }.groupBy { it.client }.forEach { (client, components) ->
-                            client.setComponentsDirty(components)
-                        }
-                    }
-                }
+                endChangeBatch(batch)
             } finally {
                 changeBatch.remove()
             }
@@ -114,66 +85,73 @@ internal sealed class StartChangeBatchResult : Closeable {
     }
 }
 
-private data class DirtyNodeData(var isTemporaryMarked : Boolean, var isRootDirty : Boolean)
 
-private fun findAllPotentiallyDirtyNodes(changed : Sequence<Atom>) : MutableMap<ReactiveObserver, DirtyNodeData> {
-    val dirtied =
-        IdentityHashMap<ReactiveObserver, DirtyNodeData>()
-    var first = true
-    var unvisited = changed.flatMap { it.observers.asSequence() }.toList()
-    while(true){
-        val nextUnvisited = mutableListOf<ReactiveObserver>()
-        unvisited.forEach { observer ->
-            if(dirtied.put(observer,
-                    DirtyNodeData(false, isRootDirty = first)
-                ) == null){
-                if(observer is ComputedValue<*>){
-                    nextUnvisited.addAll(observer.observers)
+private data class DirtyData(var maxDepth : Int, var dependencyChanged : Boolean = false)
+private fun endChangeBatch(batch : ChangeBatch){
+    val changes = batch.changes
+    if (changes.isNotEmpty()) {
+        val handlers = mutableMapOf<ReactiveObserver.DirtyHandlerFactory, ReactiveObserver.DirtyHandler>()
+
+        while(changes.isNotEmpty()){ //A dirty reaction may have triggered additional changes in this change block, so we may need to loop.
+            //Find all potentially dirtied nodes
+            val dirty = IdentityHashMap<ReactiveObserver, DirtyData>(changes.size * 2)
+            fun register(it : ReactiveObserver, depth : Int){
+                var recurse = false
+                dirty.compute(it){ _, data ->
+                    if(data == null){
+                        recurse = true
+                        DirtyData(maxDepth = depth, dependencyChanged = depth == 0)
+                    } else {
+                        recurse = depth > data.maxDepth //Only need to update max depths if this is a deeper path
+                        data.maxDepth = data.maxDepth.coerceAtLeast(depth)
+                        data.dependencyChanged = data.dependencyChanged || depth == 0
+                        data
+                    }
+                }
+                if (recurse && it is ReactiveObserver.WithDependents){
+                    it.observers.forEach { sub ->
+                        register(sub, depth + 1)
+                    }
                 }
             }
-        }
-        if(nextUnvisited.isEmpty()){ break }
-        unvisited = nextUnvisited
-        first = false
-    }
-    return dirtied
-}
-
-private data class ObserverCountAndList(
-    val staleDependencyCount : IdentityHashMap<ReactiveObserver, Int>,
-    val observers : List<ReactiveObserver>
-)
-
-private fun topologicalSort(dirty : MutableMap<ReactiveObserver, DirtyNodeData>) : ObserverCountAndList {
-    val sorted =
-        ArrayList<ReactiveObserver>()
-    val staleDependencyCount =
-        IdentityHashMap<ReactiveObserver, Int>()
-
-    fun visit(key : ReactiveObserver, data: DirtyNodeData){
-        if(data.isTemporaryMarked){
-            throw IllegalStateException("Circular loop detected involving $key")
-        }
-        data.isTemporaryMarked = true
-        if(key is ComputedValue<*>){
-            key.observers.forEach { obs ->
-                dirty[obs]?.let { visit(obs, it) }
-                staleDependencyCount.compute(obs) { _, value -> (value ?: 0) + 1}
+            for (change in changes) {
+                for (it in change.observers) {
+                    register(it, 0)
+                }
             }
+            changes.clear()
+
+            //Sort into depth buckets
+            val byDepth = mutableMapOf<Int, MutableMap<ReactiveObserver, DirtyData>>()
+            for((obs, data) in dirty){
+                byDepth.getOrPut(data.maxDepth) { mutableMapOf() }[obs] = data
+            }
+
+            var depth = 0
+            while(byDepth.containsKey(depth)){
+                val atDepth = byDepth[depth]!!
+                for((obs, data) in atDepth){
+                    if(!data.dependencyChanged){
+                        continue
+                    }
+                    val handler = handlers.getOrPut(obs.dirtyHandlerFactory){ obs.dirtyHandlerFactory.create() }
+                    val changed = handler.handleDirty(obs)
+                    if(changed && obs is ReactiveObserver.WithDependents){
+                        obs.observers.forEach { subObs ->
+                            dirty[subObs]?.dependencyChanged = true
+                        }
+                    }
+                }
+                depth += 1
+            }
+            //Loop in case actions triggered more changes
         }
-        dirty.remove(key)
-        sorted.add(key)
-        staleDependencyCount.compute(key) { _, value -> (value ?: 0) + if(data.isRootDirty) 1 else 0}
+        //End batch
+        for (it in handlers) {
+            it.value.endBatch()
+        }
+
     }
-    while(dirty.isNotEmpty()){
-        val first = dirty.entries.first()
-        visit(first.key, first.value)
-    }
-    return ObserverCountAndList(
-        //We put the deepest dependencies first when iterating
-        observers = sorted.asReversed(),
-        staleDependencyCount = staleDependencyCount
-    )
 }
 
 

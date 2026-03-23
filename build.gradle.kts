@@ -17,7 +17,7 @@ apply(plugin = "signing")
 apply(plugin = "com.github.ben-manes.versions") //For finding outdated dependencies
 
 group = "net.justmachinery"
-version = "0.6.1-SNAPSHOT"
+version = "0.6.2"
 
 tasks.register<JavaExec>("testServer") {
     classpath = sourceSets["test"].runtimeClasspath

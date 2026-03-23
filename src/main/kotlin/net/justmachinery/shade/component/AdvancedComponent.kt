@@ -92,6 +92,8 @@ class MountingContext(private val component: AdvancedComponent<*,*>) {
             component.reactions = mutableListOf()
             component.reactions!!
         }
-        reactions.add(Reaction(cb))
+        val reaction = Reaction(cb)
+        reactions.add(reaction)
+        reaction.run()
     }
 }

@@ -1,48 +1,33 @@
 package net.justmachinery.shade.state
 
 import net.justmachinery.futility.GetSet
+import net.justmachinery.futility.Maybe
 import kotlin.reflect.KProperty
 
 typealias RivObs<T> = RivObservableValue<T>
+
+/**
+ * Reactive Initial Value observable value- resets to the value of generate() when dependencies change, otherwise can be set.
+ */
 class RivObservableValue<T>(
     private val generate: ()->T
 ) : GetSet<T> {
-    private var computed : Reaction? = null
-    private var _value : T? = null
-    private var hasSetValue = false
+    private var computed = ComputedValue({
+        manualValue = Maybe.Nothing()
+        generate()
+    })
+    private var manualValue : Maybe<T> = Maybe.Nothing()
     private val atom = Atom()
 
-    private fun initializeComputed(){
-        if(computed == null){
-            synchronized(this){
-                if(computed == null){
-                    computed = Reaction {
-                        if(!hasSetValue || computed != null){
-                            _value = generate()
-                            if(computed != null){
-                                atom.reportChanged()
-                            }
-                        } else {
-                            generate()
-                        }
-                    }
-                }
-            }
-        }
-    }
 
     override fun get(): T {
         atom.reportObserved()
-        initializeComputed()
-        @Suppress("UNCHECKED_CAST")
-        return _value as T
+        return manualValue.or(computed.get())
     }
     override fun set(value: T) {
-        if (value != this._value) {
-            this._value = value
-            hasSetValue = true
-            atom.reportChanged()
-        }
+        computed.get() //We need this initialized and ready to change in the future.
+        manualValue = Maybe.Just(value)
+        atom.reportChanged()
     }
     operator fun getValue(thisRef: Any?, property: KProperty<*>): T =
         get()
@@ -52,6 +37,5 @@ class RivObservableValue<T>(
     var value: T
         get() = get()
         set(value) = set(value)
-    fun isObserved() = atom.isObserved()
 }
 

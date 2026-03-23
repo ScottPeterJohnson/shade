@@ -1,5 +1,6 @@
 package net.justmachinery.shade.state
 
+import com.google.common.collect.Sets
 import net.justmachinery.futility.withValue
 import net.justmachinery.shade.component.AdvancedComponent
 import kotlin.reflect.KProperty
@@ -13,10 +14,10 @@ internal data class ObserveBlock(
 
 fun ignoringChanges(cb : ()->Unit) = observeBlock.withValue(null){ cb() }
 
-sealed class ReactiveObserver {
-    internal abstract val observing: MutableSet<Atom>
+abstract class ReactiveObserver {
+    protected abstract val observing: MutableSet<Atom>
 
-    internal fun <T> runRecordingDependencies(run : ()->T) : T {
+    fun <T> runRecordingDependencies(run : ()->T) : T {
         val newState = ObserveBlock(observer = this, observed = mutableSetOf())
         try {
             observeBlock.withValue(newState) {
@@ -40,22 +41,50 @@ sealed class ReactiveObserver {
         }
     }
 
-    internal fun dispose(){
+    /**
+     * Cleans up this ReactiveObserver, removing it from any atoms it's registered to.
+     */
+    fun dispose(){
         observing.forEach { it.observers.remove(this) }
         observing.clear()
     }
+
+    /**
+     * This is a factory for instances which handle what to actually do with a ReactiveObserver when it is marked dirty in a change batch.
+     * One instance is lazily created per change batch. Factories should likely be singletons per class!
+     */
+    abstract val dirtyHandlerFactory : DirtyHandlerFactory
+
+    abstract class DirtyHandlerFactory {
+        abstract fun create() : DirtyHandler
+    }
+    interface DirtyHandler {
+        /**
+         * @return If this is WithDependents, return true if this actually changed and its dependents should run. Otherwise irrelevant.
+         */
+        fun handleDirty(obs : ReactiveObserver) : Boolean
+        fun endBatch(){}
+    }
+
+    /**
+     * For observers who may themselves have dependents observing them which would become dirty on change
+     */
+    interface WithDependents {
+        val observers : Set<ReactiveObserver>
+    }
 }
+
 
 class ComputedValue<T>(
     private val compute: () -> T,
     lazy : Boolean = true
-) : ReactiveObserver() {
+) : ReactiveObserver(), ReactiveObserver.WithDependents {
     private val atom = Atom()
 
-    @Volatile private var dirty = true
+    @Volatile private var initialized = false
     @Volatile private var value: T? = null
 
-    val observers get() = atom.observers
+    override val observers get() : Set<ReactiveObserver> = atom.observers
     override val observing = mutableSetOf<Atom>()
 
     init {
@@ -66,20 +95,28 @@ class ComputedValue<T>(
 
     private fun blindCompute(){
         synchronized(this){
-            this.runRecordingDependencies {
+            runRecordingDependencies {
                 value = compute()
-                dirty = false
+                initialized = true
             }
         }
     }
 
-    internal fun computeAndCheckChange() : Boolean {
+    override val dirtyHandlerFactory get() = DirtyHandlerFactory
+    object DirtyHandlerFactory : ReactiveObserver.DirtyHandlerFactory(){
+        override fun create() = DirtyHandler
+    }
+    object DirtyHandler : ReactiveObserver.DirtyHandler {
+        override fun handleDirty(obs: ReactiveObserver) = (obs as ComputedValue<*>).computeAndCheckChange()
+    }
+
+    private fun computeAndCheckChange() : Boolean {
         return synchronized(this){
             runRecordingDependencies {
                 val oldValue = value
                 value = compute()
-                val didChange = dirty || oldValue != value
-                dirty = false
+                val didChange = !initialized || oldValue != value
+                initialized = true
                 didChange
             }
         }
@@ -98,14 +135,14 @@ class ComputedValue<T>(
     fun compact(){
         synchronized(this){
             value = null
-            dirty = true
+            initialized = false
         }
     }
 
     fun get(): T {
         atom.reportObserved()
         synchronized(this){
-            if(dirty){
+            if(!initialized){
                 blindCompute()
             }
             @Suppress("UNCHECKED_CAST")
@@ -119,20 +156,46 @@ class ComputedValue<T>(
 
 internal class Render(internal var component : AdvancedComponent<*, *>?) : ReactiveObserver() {
     override val observing = mutableSetOf<Atom>()
-
     override fun toString() = "Render(${component})"
+    override val dirtyHandlerFactory get() = DirtyHandlerFactory
+    object DirtyHandlerFactory : ReactiveObserver.DirtyHandlerFactory(){
+        override fun create() = DirtyHandler()
+    }
+    class DirtyHandler : ReactiveObserver.DirtyHandler {
+        private val renders = Sets.newIdentityHashSet<Render>()
+        override fun handleDirty(obs: ReactiveObserver) : Boolean {
+            renders.add(obs as Render)
+            return false
+        }
+        override fun endBatch() {
+            if(renders.isNotEmpty()){
+                renders.asSequence().mapNotNull {
+                    val component = it.component
+                    if(component == null){ it.dispose() }
+                    component
+                }.groupBy { it.client }.forEach { (client, components) ->
+                    client.setComponentsDirty(components)
+                }
+            }
+        }
+    }
 }
 
 class Reaction(private val cb: () -> Unit) : ReactiveObserver() {
     override val observing = mutableSetOf<Atom>()
-
-    init {
-        run()
-    }
-
+    override fun toString() = "Reaction($cb)"
     fun run() {
         runRecordingDependencies(cb)
     }
 
-    override fun toString() = "Reaction($cb)"
+    override val dirtyHandlerFactory get() = DirtyHandlerFactory
+    object DirtyHandlerFactory : ReactiveObserver.DirtyHandlerFactory(){
+        override fun create() = DirtyHandler
+    }
+    object DirtyHandler : ReactiveObserver.DirtyHandler {
+        override fun handleDirty(obs: ReactiveObserver) : Boolean {
+            (obs as Reaction).run()
+            return false
+        }
+    }
 }
