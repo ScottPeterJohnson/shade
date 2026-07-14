@@ -4,10 +4,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.html.*
-import mu.KLogging
 import net.justmachinery.futility.Json
 import net.justmachinery.futility.lambdas.EqLambda
 import net.justmachinery.futility.lambdas.eqL
+import net.justmachinery.futility.logging.KLogging
 import net.justmachinery.futility.logging.MdcPair
 import net.justmachinery.futility.logging.withLoggingInfo
 import net.justmachinery.futility.strings.ellipsizeAfter

@@ -4,7 +4,6 @@ import com.google.gson.GsonBuilder
 import kotlinx.css.CssBuilder
 import kotlinx.html.CommonAttributeGroupFacade
 import kotlinx.html.HtmlBlockTag
-import kotlinx.html.HtmlTagMarker
 import kotlinx.html.style
 import net.justmachinery.shade.AttributeNames
 import net.justmachinery.shade.DirectiveType
@@ -14,7 +13,7 @@ import java.io.Flushable
 import java.io.Writer
 import java.nio.CharBuffer
 
-@HtmlTagMarker
+//Note: The receiver can't be marked @HtmlTagMarker; I think the kotlinx.html library needs to update to allow that.
 fun CommonAttributeGroupFacade.withStyle(builder: CssBuilder.() -> Unit) {
     if(!this.attributes.containsKey("style")){
         this.style = CssBuilder().apply(builder).toString().trim()

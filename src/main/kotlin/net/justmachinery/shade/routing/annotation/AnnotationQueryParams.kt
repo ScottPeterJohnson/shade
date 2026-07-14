@@ -1,6 +1,5 @@
 package net.justmachinery.shade.routing.annotation
 
-import net.justmachinery.futility.ErrorOr
 import net.justmachinery.shade.routing.base.RoutingException
 
 interface QueryParamSpec {
@@ -29,13 +28,13 @@ interface QueryParam<T> {
 
     fun optional() = OptionalParam(this)
 
-    fun tryParse(value : String?) : ErrorOr<T> {
+    fun tryParse(value : String?) : Result<T> {
         return if(value == null){
             if(this is OptionalParam<T>){
                 @Suppress("UNCHECKED_CAST")
-                ErrorOr.Result(null as T)
+                Result.success(null as T)
             } else {
-                ErrorOr.Error(
+                Result.failure(
                     QueryParamNotFoundException(
                         name
                     )
@@ -43,9 +42,9 @@ interface QueryParam<T> {
             }
         } else {
             try {
-                ErrorOr.Result(parse(value))
+                Result.success(parse(value))
             } catch(t : Throwable){
-                ErrorOr.Error<T>(
+                Result.failure(
                     QueryParamParseException(
                         name,
                         value

@@ -5,7 +5,6 @@ import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ksp.writeTo
 import kotlinx.html.Tag
-import net.justmachinery.futility.ErrorOr
 import net.justmachinery.shade.component.AdvancedComponent
 import net.justmachinery.shade.routing.annotation.*
 import net.justmachinery.shade.routing.base.WithRouting
@@ -100,19 +99,19 @@ internal class AnnotationRoutingEmitter(val environment: SymbolProcessorEnvironm
             supportConstructor.addParameter(param.name, ObservableValue::class.parameterizedBy(String::class.asTypeName().copy(nullable = true)))
             supportConstructor.addParameter(param.name + "_spec", QueryParam::class.parameterizedBy(param.type))
             support.addProperty(
-                PropertySpec.builder(param.name, ErrorOr::class.asTypeName().parameterizedBy(param.type))
+                PropertySpec.builder(param.name, Result::class.asTypeName().parameterizedBy(param.type))
                     .delegate("%M { ${param.name}_spec.tryParse(${param.name}.value) }", computed)
                     .build()
             )
             paramsHolder.addProperty(
                 PropertySpec.builder(param.name, param.type)
-                    .getter(FunSpec.getterBuilder().addCode("return support.${param.name}.unwrap()").build())
+                    .getter(FunSpec.getterBuilder().addCode("return support.${param.name}.getOrThrow()").build())
                     .build()
             )
         }
         support.addProperty(PropertySpec.builder("allValid", Boolean::class)
             .addModifiers(KModifier.OVERRIDE)
-            .delegate("%M { ${params.joinToString(" && "){ "this." + it.name + ".isResult()" } } }", computed)
+            .delegate("%M { ${params.joinToString(" && "){ "this." + it.name + ".isSuccess" } } }", computed)
             .build())
 
         support.primaryConstructor(supportConstructor.build())

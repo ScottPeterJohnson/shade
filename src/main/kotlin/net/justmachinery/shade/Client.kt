@@ -2,8 +2,8 @@ package net.justmachinery.shade
 
 import kotlinx.coroutines.*
 import kotlinx.html.HTML
-import mu.KLogging
 import net.justmachinery.futility.Json
+import net.justmachinery.futility.logging.KLogging
 import net.justmachinery.futility.logging.MdcPair
 import net.justmachinery.futility.logging.withLoggingInfo
 import net.justmachinery.futility.mechanisms.SingleConcurrentExecution
@@ -179,7 +179,7 @@ class Client(
             if(message != null){
                 logger.error(t){ message() }
             } else {
-                logger.error(t.message, t)
+                logger.error(t){ t.message }
             }
         } catch(t2 : Throwable){
             t.addSuppressed(t2)
@@ -211,7 +211,6 @@ class Client(
                         }
                     }
                 }
-                Unit
             }
         } else {
             coroutineScope.launch {

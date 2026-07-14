@@ -75,7 +75,7 @@ mavenPublishing {
         licenses {
             license {
                 name.set("The Apache License, Version 2.0")
-                url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
             }
         }
         developers {
@@ -87,7 +87,7 @@ mavenPublishing {
         scm {
             connection.set("scm:git:git://github.com/ScottPeterJohnson/shade.git")
             developerConnection.set("scm:git:ssh://github.com:ScottPeterJohnson/shade.git")
-            url.set("http://github.com/ScottPeterJohnson/shade/tree/master")
+            url.set("https://github.com/ScottPeterJohnson/shade/tree/master")
         }
     }
 }
@@ -102,14 +102,14 @@ dependencies {
     implementation("com.google.code.gson:gson:2.14.0")
     api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-slf4j:1.10.2")
-    implementation("net.justmachinery.futility:futility-core:1.0.5")
+    implementation("net.justmachinery.futility:futility-core:1.1.0")
 
     implementation("com.google.devtools.ksp:symbol-processing-api:2.3.10")
 
 
     //Logging
     api("org.slf4j:slf4j-api:2.0.17")
-    api("io.github.microutils:kotlin-logging:3.0.0")
+    implementation("io.github.oshai:kotlin-logging-jvm:8.0.4")
     implementation("com.squareup:kotlinpoet:2.3.0")
     implementation("com.squareup:kotlinpoet-ksp:2.3.0")
 

@@ -3,7 +3,7 @@ package net.justmachinery.shade.component
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.html.Tag
-import mu.KLogging
+import net.justmachinery.futility.logging.KLogging
 import net.justmachinery.shade.components.ComponentHelpers
 import net.justmachinery.shade.render.ComponentAdd
 import net.justmachinery.shade.render.ComponentRenderState
