@@ -1,8 +1,8 @@
 package net.justmachinery.shade.state
 
-import com.google.common.collect.Sets
 import net.justmachinery.futility.withValue
 import net.justmachinery.shade.component.AdvancedComponent
+import java.util.*
 import kotlin.reflect.KProperty
 
 
@@ -76,8 +76,7 @@ abstract class ReactiveObserver {
 
 
 class ComputedValue<T>(
-    private val compute: () -> T,
-    lazy : Boolean = true
+    private val compute: () -> T
 ) : ReactiveObserver(), ReactiveObserver.WithDependents {
     private val atom = Atom()
 
@@ -86,12 +85,6 @@ class ComputedValue<T>(
 
     override val observers get() : Set<ReactiveObserver> = atom.observers
     override val observing = mutableSetOf<Atom>()
-
-    init {
-        if(!lazy){
-            blindCompute()
-        }
-    }
 
     private fun blindCompute(){
         synchronized(this){
@@ -107,7 +100,23 @@ class ComputedValue<T>(
         override fun create() = DirtyHandler
     }
     object DirtyHandler : ReactiveObserver.DirtyHandler {
-        override fun handleDirty(obs: ReactiveObserver) = (obs as ComputedValue<*>).computeAndCheckChange()
+        override fun handleDirty(obs: ReactiveObserver) : Boolean {
+            obs as ComputedValue<*>
+            return if(obs.atom.isObserved()){
+                obs.computeAndCheckChange()
+            } else {
+                //Unobserved: don't compute, stop pinning dependencies. Recompute if ever needed.
+                obs.invalidate()
+                false
+            }
+        }
+    }
+
+    private fun invalidate(){
+        synchronized(this){
+            compact()
+            dispose()
+        }
     }
 
     private fun computeAndCheckChange() : Boolean {
@@ -162,7 +171,7 @@ internal class Render(internal var component : AdvancedComponent<*, *>?) : React
         override fun create() = DirtyHandler()
     }
     class DirtyHandler : ReactiveObserver.DirtyHandler {
-        private val renders = Sets.newIdentityHashSet<Render>()
+        private val renders = Collections.newSetFromMap(IdentityHashMap<Render, Boolean>())
         override fun handleDirty(obs: ReactiveObserver) : Boolean {
             renders.add(obs as Render)
             return false

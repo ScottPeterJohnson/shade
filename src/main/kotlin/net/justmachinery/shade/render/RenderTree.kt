@@ -128,22 +128,29 @@ internal class RenderTreeRecorder(
 }
 
 /**
- * Call unmount on any components in oldRoot not present in the same location as newRoot
+ * Call unmount on any components in oldRoot that were not reused in newRoot.
  */
 internal fun unmountDiffInRenderTrees(oldRoot : RenderTreeLocation, newRoot : RenderTreeLocation){
-    if(oldRoot.tagName != newRoot.tagName){
-        unmountAll(oldRoot)
-    } else {
-        for(i in 0 until oldRoot.children.size){
-            val oldChild = oldRoot.children[i]
-            val newChild = newRoot.children.getOrNull(i)
-            if(oldChild is RenderTreeChild.TagChild && newChild is RenderTreeChild.TagChild){
-                unmountDiffInRenderTrees(oldChild.child, newChild.child)
-            } else if (oldChild != newChild){
-                when (oldChild) {
-                    is RenderTreeChild.ComponentChild -> oldChild.component.doUnmount()
-                    is RenderTreeChild.TagChild -> unmountAll(oldChild.child)
-                }
+    val kept = Collections.newSetFromMap(IdentityHashMap<AdvancedComponent<*, *>, Boolean>())
+    collectComponents(newRoot, kept)
+    unmountComponentsExcept(oldRoot, kept)
+}
+
+private fun collectComponents(root : RenderTreeLocation, into : MutableSet<AdvancedComponent<*, *>>){
+    root.children.forEach {
+        when (it) {
+            is RenderTreeChild.TagChild -> collectComponents(it.child, into)
+            is RenderTreeChild.ComponentChild -> into.add(it.component)
+        }
+    }
+}
+
+private fun unmountComponentsExcept(root : RenderTreeLocation, kept : Set<AdvancedComponent<*, *>>){
+    root.children.forEach {
+        when (it) {
+            is RenderTreeChild.TagChild -> unmountComponentsExcept(it.child, kept)
+            is RenderTreeChild.ComponentChild -> {
+                if (it.component !in kept) { it.component.doUnmount() }
             }
         }
     }

@@ -16,6 +16,7 @@ import net.justmachinery.shade.state.batchChangesUntilSuspend
 import org.intellij.lang.annotations.Language
 import org.slf4j.MDC
 import java.util.*
+import java.util.Queue
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.CoroutineContext
@@ -136,9 +137,7 @@ class Client(
             it.doUnmount()
         }
         rootComponents.clear()
-        GlobalScope.launch(root.context) {
-            supervisor.cancel()
-        }
+        supervisor.cancel()
     }
 
     internal fun onCallbackJsError(id : Long, exception : JavascriptException) = logging {
@@ -271,7 +270,7 @@ class Client(
                 logger.trace { "Expired callback $id" }
                 null
             } else {
-                throw IllegalStateException("Unknown callback $id")
+                throw ShadeInvalidCallbackException("Unknown callback $id")
             }
         }
     }
@@ -293,23 +292,21 @@ class Client(
 
     private data class QueuedMessage(val errorTag : String?, val message : String)
     private var javascriptQueue : MutableList<QueuedMessage>? = Collections.synchronizedList(mutableListOf())
-    private fun sendJavascript(errorTag : String?, javascript : String) = logging {
-        logger.trace { "Sending javascript: ${javascript.ellipsizeAfter(200)}" }
+    private inline fun sendJavascript(errorTag : String?, javascript : StringBuilder.()->Unit) = logging {
         synchronized(handlerLock){
             if(handler != null){
-                handler!!.sendMessage(errorTag, javascript)
+                handler!!.sendMessage(errorTag) { javascript() }
             } else {
-                javascriptQueue?.add(QueuedMessage(errorTag, javascript))
+                javascriptQueue?.add(QueuedMessage(errorTag, buildString { javascript() }))
             }
         }
-
     }
     internal fun setHandler(handler : ShadeRoot.MessageHandler) = logging {
         synchronized(handlerLock){
             logger.info { "Client connected, handler set" }
             this.handler = handler
             javascriptQueue?.forEach {
-                handler.sendMessage(it.errorTag, it.message)
+                handler.sendMessage(it.errorTag, { append(it.message) })
             }
             javascriptQueue = null
         }
@@ -331,8 +328,9 @@ class Client(
     }
 
     fun executeScript(@Language("JavaScript 1.8") js : String) {
-        sendJavascript(null, js)
+        sendJavascript(null) { append(js)}
     }
+    fun executeScript(buildJs : StringBuilder.()->Unit) = sendJavascript(null, buildJs)
 
     internal fun runRepeatableExpressionWithTemplate(@Language("JavaScript 1.8") template : (Long)->String, cb : (Json?)->Unit) {
         val id = storeCallback(CallbackData(
@@ -342,7 +340,7 @@ class Client(
             errorHandler = null,
             requireEventLock = true
         ))
-        sendJavascript(id.toString(), template(id))
+        sendJavascript(id.toString()){ append(template(id)) }
     }
 
     private fun runOneoffExpressionWithTemplate(template : (Long)->String) : CompletableDeferred<Json> {
@@ -360,7 +358,7 @@ class Client(
             }),
             requireEventLock = false
         ))
-        sendJavascript(id.toString(), template(id))
+        sendJavascript(id.toString()){ template(id) }
         return future
     }
 
@@ -416,11 +414,13 @@ class JavascriptException(
     val details : JavascriptExceptionDetails
 ) : RuntimeException("${details.name}: \"${details.jsMessage}\" while evaluating \"${details.eval ?: "Outside of Shade callback"}\"\n${details.stack}")
 
+//Constructed by Gson from client-supplied JSON, so every field may really be null regardless of what
+//a well-behaved Shade client sends.
 class JavascriptExceptionDetails(
     val eval : String?,
-    val jsMessage : String,
-    val name : String,
-    val stack : String
+    val jsMessage : String?,
+    val name : String?,
+    val stack : String?
 )
 
 class GlobalClientStateIdentifier<T> {

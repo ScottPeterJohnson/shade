@@ -14,14 +14,12 @@ export function evaluateScript(tag : string|undefined, scope : Scope, script : s
 type Scope = (script: string)=>void
 export function makeEvalScope(scope : Object) : Scope {
     const final = {...baseScope, ...scope}
-    const base = []
-    for(let key of Object.getOwnPropertyNames(final)){
-        base.push(`var ${key}=final.${key};`)
-    }
-    const baseScript = base.join("\n") + "\n"
+    const names = Object.getOwnPropertyNames(final)
+    const values = names.map((name) => (final as any)[name])
     return function (script : string) {
-        eval("(function(){\n" + baseScript + script + "\n})()");
-    }.bind({})
+        const compiled = new Function(...names, "script", script)
+        compiled(...values, script)
+    }
 }
 
 export const baseScope = {

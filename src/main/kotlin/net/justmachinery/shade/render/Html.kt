@@ -1,21 +1,16 @@
 package net.justmachinery.shade.render
 
 import kotlinx.html.*
-import kotlinx.html.consumers.onFinalize
 import kotlinx.html.consumers.onFinalizeMap
 import kotlinx.html.org.w3c.dom.events.Event
 import kotlinx.html.stream.HTMLStreamBuilder
 import net.justmachinery.shade.AttributeNames
 import net.justmachinery.shade.DirectiveType
 import net.justmachinery.shade.scriptTypeSignifier
-import java.io.Writer
 import java.util.*
 
-fun shadeToWriter(writer : Writer): TagConsumer<Unit> {
+fun shadeToWriter(writer : Appendable): TagConsumer<Unit> {
     return HTMLStreamBuilder(writer, prettyPrint = false, xhtmlCompatible = false)
-        .onFinalize { _, _ ->
-            writer.close()
-        }
         .onFinalizeMap { _, _ -> Unit }
         .let { ShadeConsumer(it) }
 }

@@ -1,10 +1,5 @@
 package net.justmachinery.shade.render
 
-import com.google.common.cache.CacheBuilder
-import com.google.common.cache.CacheLoader
-import com.google.common.collect.BiMap
-import com.google.common.collect.HashBiMap
-import com.google.common.collect.Sets
 import kotlinx.html.HTML
 import kotlinx.html.Tag
 import kotlinx.html.TagConsumer
@@ -14,8 +9,7 @@ import net.justmachinery.shade.component.AdvancedComponent
 import net.justmachinery.shade.component.doMount
 import net.justmachinery.shade.state.ChangeBatchChangePolicy
 import net.justmachinery.shade.state.runChangeBatch
-import net.justmachinery.shade.utility.gson
-import java.io.ByteArrayOutputStream
+import net.justmachinery.shade.utility.JsStringWriter
 import java.lang.reflect.Constructor
 import java.util.*
 
@@ -71,8 +65,22 @@ internal data class ComponentRenderState(
     //Stores callback IDs associated with this component, allowing cleanup on rerender
     var lastRenderCallbackIds : SortedSet<Long> = sortedSetOf(),
     //Allows for callback ID reuse for the same event in the same place in the render tree, which allows for delay compensation
-    var renderTreePathToCallbackId : BiMap<Pair<RenderTreeTagLocation, String>, Long> = HashBiMap.create(0)
+    var renderTreePathToCallbackId : CallbackIdByRenderTreePath = CallbackIdByRenderTreePath()
 )
+
+//A minimal bidirectional map from (render tree path, event name) to callback ID
+internal class CallbackIdByRenderTreePath {
+    private val forward = HashMap<Pair<RenderTreeTagLocation, String>, Long>(0)
+    private val reverse = HashMap<Long, Pair<RenderTreeTagLocation, String>>(0)
+    operator fun get(key : Pair<RenderTreeTagLocation, String>) : Long? = forward[key]
+    operator fun set(key : Pair<RenderTreeTagLocation, String>, id : Long){
+        forward[key] = id
+        reverse[id] = key
+    }
+    fun removeById(id : Long){
+        reverse.remove(id)?.let { forward.remove(it) }
+    }
+}
 internal fun ShadeRootComponent.renderRoot(tag : HTML){
     runRenderBatch {
         renderInternal(this, tag, false)
@@ -92,31 +100,28 @@ internal fun rerender(client: Client, components : List<AdvancedComponent<*,*> >
 }
 
 private fun <RenderIn : Tag> AdvancedComponent<*, RenderIn>.updateRender(){
-    val html = ByteArrayOutputStream().let { baos ->
-        baos.writer().buffered().use {
-            val consumer = shadeToWriter(it)
-            val tag = tagConstructorCache[renderIn.java]
-                .newInstance(emptyMap<String,String>(), consumer) as Tag?
-            consumer.shade.containerTag = tag
-            @Suppress("UNCHECKED_CAST")
-            renderInternal(this, tag as RenderIn, addMarkers = false)
-            consumer.finalize()
-        }
-        baos.toString(Charsets.UTF_8)
+    client.executeScript {
+        append(SocketScopeNames.reconcile.raw)
+        append("(")
+        append(renderState.componentId)
+        append(",\"")
+        val consumer = shadeToWriter(JsStringWriter(this))
+        val tag = tagConstructorCache[renderIn.java]
+            .newInstance(emptyMap<String,String>(), consumer) as Tag?
+        consumer.shade.containerTag = tag
+        @Suppress("UNCHECKED_CAST")
+        renderInternal(this@updateRender, tag as RenderIn, addMarkers = false)
+        consumer.finalize()
+        append("\");")
     }
-
-
-    val escapedHtml = gson.toJson(html)
-    client.executeScript("${SocketScopeNames.reconcile.raw}(${renderState.componentId},$escapedHtml);")
 }
-private val tagConstructorCache = CacheBuilder.newBuilder().build(object : CacheLoader<Class<*>, Constructor<*>>() {
-    override fun load(key: Class<*>): Constructor<*> {
-        val constructor = key.getDeclaredConstructor(Map::class.java, TagConsumer::class.java)
+private val tagConstructorCache = object : ClassValue<Constructor<*>>() {
+    override fun computeValue(type: Class<*>): Constructor<*> {
+        val constructor = type.getDeclaredConstructor(Map::class.java, TagConsumer::class.java)
         constructor.isAccessible = true
         return constructor
     }
-
-})
+}
 
 internal fun <RenderIn : Tag> renderInternal(
     component: AdvancedComponent<*, RenderIn>,
@@ -157,9 +162,11 @@ internal fun <RenderIn : Tag> renderInternal(
             )
         }
 
-        Sets.difference(oldRenderCallbackIds, renderState.lastRenderCallbackIds).forEach {
-            component.client.removeCallback(it)
-            renderState.renderTreePathToCallbackId.inverse().remove(it)
+        oldRenderCallbackIds.forEach {
+            if(!renderState.lastRenderCallbackIds.contains(it)){
+                component.client.removeCallback(it)
+                renderState.renderTreePathToCallbackId.removeById(it)
+            }
         }
     }
 }

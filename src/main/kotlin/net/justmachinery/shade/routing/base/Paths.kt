@@ -3,9 +3,8 @@ package net.justmachinery.shade.routing.base
 import net.justmachinery.shade.state.ObservableValue
 import net.justmachinery.shade.state.obs
 import net.justmachinery.shade.utility.mergeMut
-import org.apache.http.client.utils.URLEncodedUtils
-import org.apache.http.message.BasicNameValuePair
-import java.nio.charset.Charset
+import java.net.URLDecoder
+import java.net.URLEncoder
 
 class PathData {
     private var pathParts : MutableMap<Int, ObservableValue<String?>> = mutableMapOf()
@@ -113,11 +112,28 @@ internal class BasicUrlInfo(
     override val pathInfo: String
         get() = pathSegments.joinToString("/")
     override val queryString: String
-        get() = URLEncodedUtils.format(queryParams.map { BasicNameValuePair(it.first, it.second) }.asIterable(), Charset.forName("ASCII"))
+        get() = queryParams.joinToString("&") {
+            "${URLEncoder.encode(it.first, Charsets.UTF_8)}=${URLEncoder.encode(it.second, Charsets.UTF_8)}"
+        }
 }
 
 private class ParseUrlInfo(override val pathInfo : String, override val queryString : String) :
     UrlInfo {
-    override val pathSegments by lazy { URLEncodedUtils.parsePathSegments(pathInfo).asSequence() }
-    override val queryParams by lazy { URLEncodedUtils.parse(queryString, Charset.forName("ASCII")).asSequence().map { it.name to it.value } }
+    override val pathSegments by lazy {
+        pathInfo.splitToSequence('/').filter { it.isNotEmpty() }.map {
+            //URLDecoder decodes '+' as a space, which is a query string convention that does not apply in paths
+            URLDecoder.decode(it.replace("+", "%2B"), Charsets.UTF_8)
+        }
+    }
+    override val queryParams by lazy {
+        queryString.splitToSequence('&').filter { it.isNotEmpty() }.map {
+            val separator = it.indexOf('=')
+            if(separator == -1){
+                URLDecoder.decode(it, Charsets.UTF_8) to ""
+            } else {
+                URLDecoder.decode(it.take(separator), Charsets.UTF_8) to
+                    URLDecoder.decode(it.substring(separator + 1), Charsets.UTF_8)
+            }
+        }
+    }
 }

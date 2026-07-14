@@ -1,12 +1,12 @@
 import com.github.gradle.node.npm.task.NpxTask
 
 plugins {
-    id("com.vanniktech.maven.publish") version "0.34.0"
+    id("com.vanniktech.maven.publish") version "0.37.0"
     signing
-    kotlin("jvm") version "2.2.0"
-    id("com.github.ben-manes.versions") version "0.53.0"
+    kotlin("jvm") version "2.4.0"
+    id("com.github.ben-manes.versions") version "0.54.0"
     id("com.github.node-gradle.node") version "7.1.0"
-    id("com.google.devtools.ksp") version "2.2.0-2.0.2"
+    id("com.google.devtools.ksp") version "2.3.10"
 }
 
 repositories {
@@ -17,7 +17,7 @@ apply(plugin = "signing")
 apply(plugin = "com.github.ben-manes.versions") //For finding outdated dependencies
 
 group = "net.justmachinery"
-version = "0.6.2"
+version = "1.0.0"
 
 tasks.register<JavaExec>("testServer") {
     classpath = sourceSets["test"].runtimeClasspath
@@ -39,10 +39,14 @@ tasks.register<NpxTask>("webpackDevelopment") {
 }
 
 kotlin {
-    jvmToolchain(12)
+    jvmToolchain(21)
 }
 tasks.named<UpdateDaemonJvm>("updateDaemonJvm") {
-    languageVersion = JavaLanguageVersion.of(12)
+    languageVersion = JavaLanguageVersion.of(21)
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 val sourcesJar by tasks.register<Jar>("sourcesJar") {
@@ -95,30 +99,29 @@ dependencies {
     implementation(kotlin("reflect"))
 
     api("org.jetbrains.kotlinx:kotlinx-html-jvm:0.12.0")
-    api("org.jetbrains.kotlin-wrappers:kotlin-css:2026.3.1")
+    api("org.jetbrains.kotlin-wrappers:kotlin-css:2026.7.1")
 
-    implementation("com.google.code.gson:gson:2.13.2")
-    api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+    implementation("com.google.code.gson:gson:2.14.0")
+    api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-slf4j:1.10.2")
-    implementation("com.google.guava:guava:33.5.0-jre")
-    implementation("org.apache.httpcomponents:httpclient:4.5.14")
-    implementation("org.jetbrains.kotlinx:kotlinx-metadata-jvm:0.9.0")
     implementation("net.justmachinery.futility:futility-core:1.0.5")
 
-    implementation("com.google.devtools.ksp:symbol-processing-api:2.2.0-2.0.2")
+    implementation("com.google.devtools.ksp:symbol-processing-api:2.3.10")
 
 
     //Logging
-    api("org.slf4j:slf4j-api:2.0.3")
+    api("org.slf4j:slf4j-api:2.0.17")
     api("io.github.microutils:kotlin-logging:3.0.0")
-    implementation("com.squareup:kotlinpoet:2.2.0")
-    implementation("com.squareup:kotlinpoet-ksp:2.2.0")
+    implementation("com.squareup:kotlinpoet:2.3.0")
+    implementation("com.squareup:kotlinpoet-ksp:2.3.0")
 
-    testImplementation("ch.qos.logback:logback-classic:1.5.32")
-    testImplementation("ch.qos.logback:logback-core:1.5.32")
-    testImplementation("org.slf4j:jcl-over-slf4j:2.0.3")
+    testImplementation("ch.qos.logback:logback-classic:1.5.38")
+    testImplementation("ch.qos.logback:logback-core:1.5.38")
+    testImplementation("org.slf4j:jcl-over-slf4j:2.0.17")
+    testImplementation("org.junit.jupiter:junit-jupiter:6.1.2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
     kspTest(project(":"))
 
-    testImplementation("io.javalin:javalin:6.7.0")
+    testImplementation("io.javalin:javalin:7.2.2")
 }

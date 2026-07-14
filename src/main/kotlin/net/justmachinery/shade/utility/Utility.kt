@@ -10,6 +10,9 @@ import net.justmachinery.shade.AttributeNames
 import net.justmachinery.shade.DirectiveType
 import net.justmachinery.shade.render.scriptDirective
 import org.intellij.lang.annotations.Language
+import java.io.Flushable
+import java.io.Writer
+import java.nio.CharBuffer
 
 @HtmlTagMarker
 fun CommonAttributeGroupFacade.withStyle(builder: CssBuilder.() -> Unit) {
@@ -84,3 +87,54 @@ internal fun <T1: Any, T2: Any, T3 : Any> MutableMap<T1,T2>.mergeMut(other: Sequ
 typealias RenderFunction<RenderIn> = RenderIn.()->Unit
 
 internal val gson = GsonBuilder().disableHtmlEscaping().create()
+
+/**
+ * Escapes everything written to it as if it were the body of a double-quoted
+ * JavaScript string ("...").
+ *
+ * Pure JS. It does not guard against HTML (<, >, &)
+ * or the ' and ` delimiters. U+2028/U+2029 are escaped for pre-ES2019 engines.
+ */
+internal class JsStringWriter(private val out: Appendable) : Writer() {
+    override fun write(cbuf: CharArray, off: Int, len: Int) {
+        val seq = CharBuffer.wrap(cbuf)
+        val end = off + len
+        var run = off
+        for (i in off until end) {
+            val esc = escape(cbuf[i]) ?: continue
+            if (i > run) {
+                out.append(seq, run, i)
+            }
+            out.append(esc)
+            run = i + 1
+        }
+        if (end > run) {
+            out.append(seq, run, end)
+        }
+    }
+
+    private fun escape(c: Char): String? = when (c) {
+        '\\' -> "\\\\"
+        '"' -> "\\\""
+        '\n' -> "\\n"
+        '\r' -> "\\r"
+        '\t' -> "\\t"
+        '\u2028' -> "\\u2028"
+        '\u2029' -> "\\u2029"
+        else -> if (c < ' ') {
+            "\\x${c.code.toString(16).padStart(2, '0')}"
+        } else {
+            null
+        }
+    }
+
+    override fun flush() {
+        (out as? Flushable)?.flush()
+    }
+
+    override fun close() {
+        flush()
+        (out as? AutoCloseable)?.close()
+    }
+}
+

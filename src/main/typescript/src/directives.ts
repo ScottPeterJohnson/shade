@@ -42,11 +42,11 @@ export function asShadeDirective(child : Node) : Directive|null {
                 const script = child.getAttribute(AttributeNames.ApplyJsScript)!!
                 return new ApplyJs(script, runOption === "1")
             case DirectiveType.ComponentStart:
-                return new ComponentStart(id.substr(componentIdPrefix.length))
+                return new ComponentStart(id.substring(componentIdPrefix.length))
             case DirectiveType.ComponentEnd:
-                return new ComponentEnd(id.substr(5, id.length - componentIdPrefix.length - componentIdEndSuffix.length))
+                return new ComponentEnd(id.substring(componentIdPrefix.length, id.length - componentIdEndSuffix.length))
             case DirectiveType.ComponentKeep:
-                return new Keep(id.substr(componentIdPrefix.length))
+                return new Keep(id.substring(componentIdPrefix.length))
             case DirectiveType.SetAttribute: {
                 const name = child.getAttribute(AttributeNames.SetAttributeName)!!
                 const value = child.getAttribute(AttributeNames.SetAttributeValue)

@@ -129,7 +129,10 @@ function suppressChangeListeners(target : HTMLInputElement, cb : ()=>void){
     suppressEventFiring.suppress = true
     const oldOnChange = target.onchange
     target.onchange = null
-    cb()
-    target.onchange = oldOnChange
-    suppressEventFiring.suppress = false
+    try {
+        cb()
+    } finally {
+        target.onchange = oldOnChange
+        suppressEventFiring.suppress = false
+    }
 }

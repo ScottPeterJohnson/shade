@@ -9,11 +9,10 @@ fun <T> obs(value: T) = observable(value)
 fun <T> observable(value: T) = ObservableValue(value)
 
 /**
- * Create a computed value, which automatically updates itself when required.
- * @param lazy If true, will not immediately compute the value, will only compute when requested.
+ * Create a computed value, which automatically updates itself when its value is required.
  */
-fun <T> computed(lazy : Boolean = true, block: () -> T) =
-    ComputedValue(block, lazy)
+fun <T> computed(block: () -> T) =
+    ComputedValue(block)
 
 /**
  * Create an observable value. The value will reset to the output of

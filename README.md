@@ -92,6 +92,8 @@ drop-in for projects already using the Kotlinx HTML DSL, or embedded within any 
 Clone this project and run `./gradlew testServer` to play with a simple demo page. Check [TestServer.kt](https://github.com/ScottPeterJohnson/shade/blob/master/src/test/kotlin/net/justmachinery/shade/TestServer.kt) for an example source.
 
 ## Installation
+Shade requires Java 21 or newer.
+
 Add the following to your Gradle build file:
 ```
 dependencies {
@@ -100,6 +102,15 @@ dependencies {
 ```
 
 Replace VERSION with the latest version of this repository (currently ![Maven Central](https://img.shields.io/maven-central/v/net.justmachinery/shade))
+
+### Integration notes
+- `MessageHandler.onMessage` will not throw: messages that don't follow the Shade protocol are logged and the
+  connection is dropped. Your web framework should still apply its own error handling around its websocket plumbing.
+- The client ID embedded in each rendered page identifies that client's server-side session for as long as it lives;
+  treat page output and logs containing it accordingly.
+- There is intentionally no websocket auto-reconnect: after a connection loss the server can't know which in-flight
+  updates the client saw, so the page reloads and server-side page state starts fresh. Save durable state as it's
+  entered rather than accumulating it in components.
 
 ## Contributions welcome!
 This is a highly experimental library. The core is simple enough to be functionally usable, but parts and polish may be lacking. Help us out by opening an issue or submitting a patch!

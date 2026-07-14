@@ -8,6 +8,7 @@
     "closure-webpack-plugin": "^2.6.1",
     "google-closure-compiler": "^20210202.0.0",
     "ts-loader": "^8.4.0",
+    "ts-node": "^10.9.2",
     "typescript": "^4.9.4",
     "webpack": "^5.75.0",
     "webpack-cli": "^5.0.1"

@@ -1,6 +1,5 @@
 package net.justmachinery.shade.state
 
-import com.google.common.collect.Sets
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.ThreadContextElement
 import java.io.Closeable
@@ -60,7 +59,7 @@ internal fun startChangeBatch(changePolicy: ChangeBatchChangePolicy) : StartChan
     } else {
         val newBatch = ChangeBatch(
             changePolicy = changePolicy,
-            changes = Sets.newIdentityHashSet()
+            changes = Collections.newSetFromMap(IdentityHashMap())
         )
         changeBatch.set(newBatch)
         StartChangeBatchResult.New(newBatch)

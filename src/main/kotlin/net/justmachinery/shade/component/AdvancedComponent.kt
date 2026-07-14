@@ -64,7 +64,8 @@ abstract class AdvancedComponent<PropType : Any, RenderIn : Tag>(fullProps : Com
     internal val renderDependencies = Render(this)
 
     internal val supervisorJob = SupervisorJob(parent = fullProps.client.supervisor)
-    override val coroutineContext: CoroutineContext get() = realComponentThis().supervisorJob
+    private val cContext = client.coroutineScope.coroutineContext + supervisorJob
+    override val coroutineContext: CoroutineContext get() = realComponentThis().cContext
 
     internal var reactions : MutableList<Reaction>? = null
 

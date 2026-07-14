@@ -1,7 +1,5 @@
 package net.justmachinery.shade
 
-import com.google.common.cache.CacheBuilder
-import com.google.common.cache.CacheLoader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -178,16 +176,21 @@ class ShadeRoot(
         var clientId : UUID? = null
         private var clientData : Client? = null
 
-        internal fun sendMessage(errorTag : String?, message : String){
-            send("${errorTag ?: ""}|$message")
+        internal inline fun sendMessage(errorTag : String?, message : StringBuilder.()->Unit){
+            send(buildString {
+                append(errorTag ?: "")
+                append(messageTagSeparator)
+                message()
+            })
         }
         /**
          * This should be called by your web framework when a websocket receives a message.
          * Ideally, the web framework should process these messages sequentially for a given websocket.
+         * This method may throw exceptions for your web framework to process.
          */
         fun onMessage(message : String){
             if(message.isEmpty()) return
-            processMessage(message)
+                processMessage(message)
         }
 
         private fun processMessage(message : String){
@@ -205,26 +208,60 @@ class ShadeRoot(
                         clientData = clientDataMap[clientId]
                         if(clientData == null){
                             logger.info { "Client ID expired or invalid: $clientId" }
-                            sendMessage(null, "window.location.reload(true)")
+                            sendMessage(null, { append("window.location.reload(true)") })
                             disconnect()
                         } else {
                             clientData!!.setHandler(this@MessageHandler)
                         }
                     } else {
-                        val (tag, data) = message.split('|', limit = 2)
-                        val error by lazy { JavascriptException(gson.fromJson(data, JavascriptExceptionDetails::class.java)) }
-                        if(tag == "E"){ //Global caught error
-                            try { onUncaughtJavascriptException(clientData!!, error) } catch(t : Throwable){
-                                logger.error(t) { "While handling uncaught global JavaScript error" }
+                        try {
+                            val split = message.split(messageTagSeparator, limit = 2)
+                            if (split.size != 2) {
+                                throw ShadeInvalidMessageException(
+                                    "No tag separator in message: ${
+                                        message.ellipsizeAfter(
+                                            200
+                                        )
+                                    }"
+                                )
                             }
-                        } else { //Attached to a callback
-                            val isError = tag.startsWith('E')
-                            val callbackId = tag.dropWhile { it == 'E' }.toLong()
-                            if(isError){
-                                clientData!!.onCallbackJsError(callbackId, error)
-                            } else {
-                                clientData!!.callCallback(callbackId, data.ifBlank { null }?.let { Json(it) })
+                            val (tag, data) = split
+                            val error by lazy {
+                                val details = gson.fromJson(data, JavascriptExceptionDetails::class.java)
+                                    ?: throw ShadeInvalidMessageException(
+                                        "No error details in message: ${
+                                            message.ellipsizeAfter(
+                                                200
+                                            )
+                                        }"
+                                    )
+                                JavascriptException(details)
                             }
+                            if (tag == messageTagErrorPrefix) { //Global caught error
+                                try {
+                                    onUncaughtJavascriptException(clientData!!, error)
+                                } catch (t: Throwable) {
+                                    logger.error(t) { "While handling uncaught global JavaScript error" }
+                                }
+                            } else { //Attached to a callback
+                                val isError = tag.startsWith(messageTagErrorPrefix)
+                                val callbackId = tag.dropWhile { it == 'E' }.toLongOrNull()
+                                    ?: throw ShadeInvalidCallbackException(
+                                        "Malformed callback tag: ${
+                                            tag.ellipsizeAfter(
+                                                200
+                                            )
+                                        }"
+                                    )
+                                if (isError) {
+                                    clientData!!.onCallbackJsError(callbackId, error)
+                                } else {
+                                    clientData!!.callCallback(callbackId, data.ifBlank { null }?.let { Json(it) })
+                                }
+                            }
+                        } catch (t: Throwable) {
+                            disconnect()
+                            throw t
                         }
                     }
                 }
@@ -245,13 +282,19 @@ class ShadeRoot(
     }
 }
 
-private val componentConstructorCache = CacheBuilder.newBuilder().build(object : CacheLoader<Class<*>, Constructor<*>>(){
-    override fun load(key: Class<*>): Constructor<*> {
-        val constructor = key.getDeclaredConstructor()
+private val componentConstructorCache = object : ClassValue<Constructor<*>>() {
+    override fun computeValue(type: Class<*>): Constructor<*> {
+        val constructor = type.getDeclaredConstructor()
         constructor.isAccessible = true
         return constructor
     }
-})
+}
+
+/**
+ * Thrown when a websocket message doesn't follow the Shade protocol.
+ */
+open class ShadeInvalidMessageException(message : String) : RuntimeException(message)
+class ShadeInvalidCallbackException(message : String) : ShadeInvalidMessageException(message)
 
 sealed class AddScriptStrategy {
     data class Inline(val production : Boolean) : AddScriptStrategy()

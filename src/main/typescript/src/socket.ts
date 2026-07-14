@@ -43,7 +43,7 @@ export function connectSocket(){
         const lastReload = localStorage.getItem("shade_error_reload");
         if(lastReload){
             errorDisplay("This web page could not connect to its server. Please reload or try again later.");
-            localStorage.removeItem("shade_last_error_reload");
+            localStorage.removeItem("shade_error_reload");
         } else {
             localStorage.setItem("shade_error_reload", "true");
             location.reload();
