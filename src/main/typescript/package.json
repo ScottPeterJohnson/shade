@@ -1,16 +1,17 @@
 {
   "name": "shade",
   "version": "1.0.0",
-  "main": "shade.ts",
+  "main": "src/shade.ts",
   "license": "MIT",
+  "scripts": {
+    "build": "vite build && vite build --mode development",
+    "test": "vitest run"
+  },
   "devDependencies": {
-    "@types/node": "^14.18.34",
-    "closure-webpack-plugin": "^2.6.1",
-    "google-closure-compiler": "^20210202.0.0",
-    "ts-loader": "^8.4.0",
-    "ts-node": "^10.9.2",
-    "typescript": "^4.9.4",
-    "webpack": "^5.75.0",
-    "webpack-cli": "^5.0.1"
+    "@types/node": "^22.10.2",
+    "jsdom": "^25.0.1",
+    "typescript": "^5.9.3",
+    "vite": "^6.0.5",
+    "vitest": "^3.2.7"
   }
 }

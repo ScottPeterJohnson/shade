@@ -22,7 +22,8 @@ class RivObservableValue<T>(
 
     override fun get(): T {
         atom.reportObserved()
-        return manualValue.or(computed.get())
+        val generated = computed.get() //May immediately clear manualValue
+        return manualValue.or(generated)
     }
     override fun set(value: T) {
         computed.get() //We need this initialized and ready to change in the future.

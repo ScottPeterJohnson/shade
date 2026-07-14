@@ -89,8 +89,10 @@ interface UrlInfo {
     }
 
     fun addPathPrefix(prefix : String) : UrlInfo {
+        val prefixTrimmed = prefix.removeSuffix("/")
+        val pathTrimmed = pathInfo.removePrefix("/")
         return ParseUrlInfo(
-            pathInfo = "$prefix${if (prefix.endsWith("/")) "" else "/"}$pathInfo",
+            pathInfo = "$prefixTrimmed/$pathTrimmed",
             queryString = queryString
         )
     }

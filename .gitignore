@@ -5,3 +5,5 @@ gradlew.bat
 gradle.properties
 **/node_modules
 **/*.js
+!src/main/resources/js/shade-bundle.js
+!src/main/resources/js/shade-bundle-min.js

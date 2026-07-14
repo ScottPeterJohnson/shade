@@ -17,8 +17,8 @@ export function makeEvalScope(scope : Object) : Scope {
     const names = Object.getOwnPropertyNames(final)
     const values = names.map((name) => (final as any)[name])
     return function (script : string) {
-        const compiled = new Function(...names, "script", script)
-        compiled(...values, script)
+        const compiled = new Function(...names, `return (function(){\n${script}\n})()`)
+        return compiled(...values)
     }
 }
 

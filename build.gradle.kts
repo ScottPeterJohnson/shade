@@ -1,3 +1,4 @@
+import com.github.gradle.node.npm.task.NpmTask
 import com.github.gradle.node.npm.task.NpxTask
 
 plugins {
@@ -13,9 +14,6 @@ repositories {
     mavenCentral()
 }
 
-apply(plugin = "signing")
-apply(plugin = "com.github.ben-manes.versions") //For finding outdated dependencies
-
 group = "net.justmachinery"
 version = "1.0.0"
 
@@ -24,17 +22,14 @@ tasks.register<JavaExec>("testServer") {
     mainClass.set("net.justmachinery.shade.TestServerKt")
 }
 
-tasks.register("webpack") {
-    dependsOn("webpackProduction", "webpackDevelopment")
-}
-tasks.register<NpxTask>("webpackProduction") {
-    command.set("webpack")
-    args.set(listOf("--mode=production"))
+tasks.register<NpmTask>("buildJs") {
+    args.set(listOf("run", "build"))
     workingDir = (file("./src/main/typescript"))
 }
-tasks.register<NpxTask>("webpackDevelopment") {
-    command.set("webpack")
-    args.set(listOf("--mode=development"))
+
+tasks.register<NpxTask>("jsTest") {
+    command.set("vitest")
+    args.set(listOf("run"))
     workingDir = (file("./src/main/typescript"))
 }
 
@@ -47,6 +42,9 @@ tasks.named<UpdateDaemonJvm>("updateDaemonJvm") {
 
 tasks.test {
     useJUnitPlatform()
+}
+tasks.check {
+    dependsOn("jsTest")
 }
 
 val sourcesJar by tasks.register<Jar>("sourcesJar") {

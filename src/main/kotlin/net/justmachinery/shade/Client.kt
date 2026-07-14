@@ -266,7 +266,7 @@ class Client(
 
     private fun getCallback(id : Long) : CallbackData? {
         return storedCallbacks[id] ?: run {
-            if(id < nextCallbackId.get()){
+            if(id <= nextCallbackId.get()){
                 logger.trace { "Expired callback $id" }
                 null
             } else {
@@ -358,7 +358,7 @@ class Client(
             }),
             requireEventLock = false
         ))
-        sendJavascript(id.toString()){ template(id) }
+        sendJavascript(id.toString()){ append(template(id)) }
         return future
     }
 

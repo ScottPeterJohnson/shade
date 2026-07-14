@@ -66,21 +66,23 @@ fun main(){
         val shadeDemo = Handler { ctx ->
             ctx.contentType("text/html;charset=UTF-8")
             //Let's throw some shade:
-            root.render(ctx.outputStream().bufferedWriter()) {
-                head {}
-                body { tag ->
-                    //Adding this line is convenient because Kotlin does not yet allow multiple receivers on a lambda
-                    tag.run {
-                        h2 {
-                            +"Shade test page"
-                        }
-                        //Look at RootComponent for a more in-depth overview of how to render with shade
-                        add(
-                            RootComponent::class, UrlInfo.of(
-                                ctx.req().pathInfo,
-                                ctx.req().queryString
+            ctx.outputStream().bufferedWriter().use {
+                root.render(it) {
+                    head {}
+                    body { tag ->
+                        //Adding this line is convenient because Kotlin does not yet allow multiple receivers on a lambda
+                        tag.run {
+                            h2 {
+                                +"Shade test page"
+                            }
+                            //Look at RootComponent for a more in-depth overview of how to render with shade
+                            add(
+                                RootComponent::class, UrlInfo.of(
+                                    ctx.req().pathInfo,
+                                    ctx.req().queryString
+                                )
                             )
-                        )
+                        }
                     }
                 }
             }

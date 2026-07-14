@@ -74,8 +74,7 @@ function reconcileNodes(original : Node, newer : Node) : Node {
             return newer;
         } else {
             let changed = false
-            for(let i=0;i<original.attributes.length;i++){
-                const attribute = original.attributes[i].name;
+            for(const attribute of original.getAttributeNames()){
                 if(!newer.hasAttribute(attribute)){
                     applyAttributeValue(original, attribute, null)
                     changed = true;
