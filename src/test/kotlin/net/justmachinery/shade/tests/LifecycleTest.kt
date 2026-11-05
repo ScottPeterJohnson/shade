@@ -21,6 +21,7 @@ private class LifecycleChild : Component<Unit>() {
     val unmounts = AtomicInteger(0)
     val reactionRuns = AtomicInteger(0)
     @Volatile var rendersBeforeMounted = -1
+    @Volatile var changedStateOnUnmount = false
 
     override fun MountingContext.mounted() {
         rendersBeforeMounted = renders.get()
@@ -32,6 +33,8 @@ private class LifecycleChild : Component<Unit>() {
 
     override fun unmounted() {
         unmounts.incrementAndGet()
+        count += 1
+        changedStateOnUnmount = true
     }
 
     override fun HtmlBlockTag.render() {
@@ -97,6 +100,15 @@ class LifecycleTest {
         assertTrue(setup.wrapper.supervisorJob.isCancelled, "unmounting should cascade through the component in between")
         assertFalse(setup.child.supervisorJob.isActive)
         assertEquals(1, setup.child.unmounts.get(), "unmounted() should be called exactly once")
+    }
+
+    @Test
+    fun `unmounted may change state`() {
+        val setup = Setup()
+
+        setup.unmountChild()
+
+        assertTrue(setup.child.changedStateOnUnmount, "changing state in unmounted() should not throw")
     }
 
     @Test

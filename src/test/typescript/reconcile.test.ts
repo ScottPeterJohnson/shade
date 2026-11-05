@@ -100,6 +100,16 @@ describe("reconciling keyed children", () => {
         expect(markers("div")).toEqual(["c"]);
     });
 
+    it("inserts an unkeyed element in front of a keyed one without losing either", () => {
+        render('<div data-k="a">A</div>');
+        mark(document.querySelector("div")!, "a");
+
+        update('<div>header</div><div data-k="a">A</div>');
+
+        expect(texts("div")).toEqual(["header", "A"]);
+        expect(markers("div")).toEqual([undefined, "a"]);
+    });
+
     it("handles two children sharing one key without crashing", () => {
         render('<div data-k="same">A</div><div data-k="same">B</div>');
 

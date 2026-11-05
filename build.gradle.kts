@@ -34,10 +34,10 @@ tasks.register<NpxTask>("jsTest") {
 }
 
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(25)
 }
 tasks.named<UpdateDaemonJvm>("updateDaemonJvm") {
-    languageVersion = JavaLanguageVersion.of(21)
+    languageVersion = JavaLanguageVersion.of(25)
 }
 
 tasks.test {

@@ -7,6 +7,8 @@ import net.justmachinery.shade.ShadeContext
 import net.justmachinery.shade.handlingErrors
 import net.justmachinery.shade.render.markDontRerender
 import net.justmachinery.shade.render.unmountAll
+import net.justmachinery.shade.state.ChangeBatchChangePolicy
+import net.justmachinery.shade.state.runChangeBatch
 import kotlin.reflect.KClass
 
 
@@ -47,8 +49,11 @@ internal fun AdvancedComponent<*,*>.doUnmount(){
 
     renderDependencies.component = null
 
-    handlingErrors(ContextErrorSource.UNMOUNTING){
-        unmounted()
+    //Unmounting happens inside a render, like mounting does, so it is allowed state changes the same way.
+    runChangeBatch(ChangeBatchChangePolicy.FORCE_ALLOWED){
+        handlingErrors(ContextErrorSource.UNMOUNTING){
+            unmounted()
+        }
     }
 }
 

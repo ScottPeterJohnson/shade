@@ -205,6 +205,11 @@ function reconcileChildren(
             if(newerKey != null){
                 //We'll directly match to the original by key, ignoring what's usually at this position
                 original = originalKeys[newerKey]?.pop();
+            } else if(original && getKey(original) != null){
+                //A keyed original is only matched by its key. Reusing it here for an unkeyed node would let a later
+                //keyed node claim it again, putting one node in two places. If nothing claims it, it is removed
+                //with the other unused keys below.
+                original = undefined;
             }
 
             let add : Node[] = [];

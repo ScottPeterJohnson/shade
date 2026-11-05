@@ -348,7 +348,8 @@ class Client(
         id = storeCallback(CallbackData(
             callback = {
                 removeCallback(id!!)
-                future.complete(it!!)
+                //The client sends no data when the result is undefined (e.g. a promise that resolves to nothing)
+                future.complete(it ?: Json("null"))
             },
             errorHandler = ContextErrorHandler(previous = null, handle = {
                 removeCallback(id!!)

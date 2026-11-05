@@ -22,7 +22,8 @@ export function connectSocket(){
         socket.send(id);
         socketReady = true;
         while (socketReadyQueue.length > 0) {
-            sendMessage(socketReadyQueue.shift()!, null);
+            //Queued messages already carry their tag and separator
+            socket.send(socketReadyQueue.shift()!);
         }
     };
 
@@ -73,6 +74,10 @@ export function connectSocket(){
 
 export function sendMessage(id : string, msg : string|undefined|null) {
     const finalMsg = (msg !== undefined && msg !== null) ? id + messageTagSeparator + msg : id + messageTagSeparator;
+    sendOrQueue(finalMsg);
+}
+
+function sendOrQueue(finalMsg : string){
     if (socketReady) {
         socket.send(finalMsg);
     } else {
@@ -94,6 +99,7 @@ export function sendIfError(error : unknown, tag?: string, evalText ?: string){
         eval: evalText,
         tag: tag
     };
-    socket.send(`${messageTagErrorPrefix}${tag == undefined ? "" : tag}${messageTagSeparator}` + JSON.stringify(data));
+    //Errors can happen before the socket opens (e.g. in applyJs on page load), when send() would throw.
+    sendOrQueue(`${messageTagErrorPrefix}${tag == undefined ? "" : tag}${messageTagSeparator}` + JSON.stringify(data));
 }
 

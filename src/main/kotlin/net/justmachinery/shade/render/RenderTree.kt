@@ -150,7 +150,7 @@ private fun unmountComponentsExcept(root : RenderTreeLocation, kept : Set<Advanc
         when (it) {
             is RenderTreeChild.TagChild -> unmountComponentsExcept(it.child, kept)
             is RenderTreeChild.ComponentChild -> {
-                if (it.component !in kept) { it.component.doUnmount() }
+                if (it.component !in kept) { it.component.unmountAndRemoveCallbacks() }
             }
         }
     }
@@ -161,8 +161,20 @@ internal fun unmountAll(root : RenderTreeLocation){
         when (it) {
             is RenderTreeChild.TagChild -> unmountAll(it.child)
             is RenderTreeChild.ComponentChild -> {
-                it.component.doUnmount()
+                it.component.unmountAndRemoveCallbacks()
             }
         }
     }
+}
+/**
+ * Unmounts a component that is leaving the render tree, and removes the event callbacks of its last render,
+ * which would otherwise stay stored (and callable) for as long as the client lives.
+ */
+private fun AdvancedComponent<*, *>.unmountAndRemoveCallbacks(){
+    doUnmount()
+    renderState.lastRenderCallbackIds.forEach {
+        client.removeCallback(it)
+        renderState.renderTreePathToCallbackId.removeById(it)
+    }
+    renderState.lastRenderCallbackIds.clear()
 }

@@ -107,7 +107,9 @@ private fun <T : Any, RenderIn : Tag> getOrConstructComponent(
         } else {
             frame.oldRenderTreeLocation?.children?.getOrNull(frame.renderTreeChildIndex)
         }
-        if(oldComponent is RenderTreeChild.ComponentChild && oldComponent.component::class == component){
+        //A keyed component is only reused by its key; letting an unkeyed add take it by position would let a keyed
+        //add later in the same render take it again, putting one component in two places.
+        if(oldComponent is RenderTreeChild.ComponentChild && oldComponent.component::class == component && oldComponent.component.key == key){
             @Suppress("UNCHECKED_CAST")
             (oldComponent.component as AdvancedComponent<T, RenderIn>)
             return if(oldComponent.component._props == props){

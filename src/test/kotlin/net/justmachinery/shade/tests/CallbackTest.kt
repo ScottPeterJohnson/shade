@@ -85,7 +85,7 @@ class EventCallbackTest {
     fun `a callback whose handler is no longer rendered expires without dropping the connection`() {
         val test = ShadeTest().render { it.add(ClickCounter::class, Unit) }
         val counter = test.component(ClickCounter::class.java)
-        val doubleClick = callbackIdFor(test.html, "doubleclick")
+        val doubleClick = callbackIdFor(test.html, "dblclick")
 
         test.awaitRerender(counter) { counter.showExtra = false }
         test.sendResponse(doubleClick)
