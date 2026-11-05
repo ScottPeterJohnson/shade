@@ -33,11 +33,19 @@ abstract class ReactiveObserver {
                 }
             }
 
-            newState.observed.forEach { dependency ->
-                if (observing.add(dependency)) {
-                    dependency.observers.add(this)
-                }
-            }
+            //Already subscribed to these in recordObserved
+            observing.addAll(newState.observed)
+        }
+    }
+
+    /**
+     * Subscribes to [atom] as soon as it is read, rather than at the end of the observing block: a change made between
+     * the two would otherwise find no observer to notify. Checking [observing] first keeps the steady state, where the
+     * atom was already read last run, to a plain set lookup instead of a write to the atom's concurrent set.
+     */
+    internal fun recordObserved(block : ObserveBlock, atom : Atom){
+        if(block.observed.add(atom) && atom !in observing){
+            atom.observers.add(this)
         }
     }
 

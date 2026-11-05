@@ -5,7 +5,8 @@ import kotlin.reflect.KProperty
 
 typealias Obs<T> = ObservableValue<T>
 class ObservableValue<T>(
-    internal var _value: T
+    //Volatile so that a reader subscribing to the atom and a writer reporting a change cannot both miss each other
+    @Volatile internal var _value: T
 ) : GetSet<T> {
     private val atom = Atom()
 

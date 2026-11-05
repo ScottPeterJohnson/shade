@@ -16,7 +16,7 @@ class RivObservableValue<T>(
         manualValue = Maybe.Nothing()
         generate()
     })
-    private var manualValue : Maybe<T> = Maybe.Nothing()
+    @Volatile private var manualValue : Maybe<T> = Maybe.Nothing()
     private val atom = Atom()
 
 
