@@ -78,6 +78,25 @@ interface EventHandlers : ComponentBase {
         )
     }
 
+    /**
+     * Listens for a mouse or pointer event (e.g. "pointerdown", "mousemove", "click"), passing where it happened.
+     * Combine with [EventJs] in [prefix] to e.g. stop propagation.
+     */
+    fun Tag.onPointerEvent(
+        eventName: String,
+        prefix: String? = null,
+        suffix: String? = null,
+        cb: suspend (PointerEventData) -> Unit
+    ) {
+        addEventCallback(
+            eventName = eventName,
+            prefix = prefix,
+            suffix = suffix,
+            data = PointerEventData.JS,
+            cb = { cb(gson.fromJson(it!!.raw, PointerEventData::class.java)) }
+        )
+    }
+
     //fun .*\.(on[^(]+)\(.*
     //fun Tag.$1(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { $1 = callbackString(eventName = "$1", prefix = prefix, suffix = suffix, data = data, cb = cb) }
 
@@ -145,4 +164,41 @@ interface EventHandlers : ComponentBase {
     fun Tag.onVolumeChange(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "volumechange", prefix = prefix, suffix = suffix, data = data, cb = cb) }
     fun Tag.onWaiting(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "waiting", prefix = prefix, suffix = suffix, data = data, cb = cb) }
     fun Tag.onWheel(prefix : String? = null, suffix : String? = null, data : String? = null, cb : suspend (Json?)->Unit) { addEventCallback(eventName = "wheel", prefix = prefix, suffix = suffix, data = data, cb = cb) }
+}
+
+/**
+ * Snippets for an event handler's prefix or suffix. Separate several with ";".
+ */
+object EventJs {
+    const val STOP_PROPAGATION = "event.stopPropagation()"
+    const val PREVENT_DEFAULT = "event.preventDefault()"
+    const val STOP_AND_PREVENT = "$STOP_PROPAGATION;$PREVENT_DEFAULT"
+}
+
+/**
+ * Where a mouse or pointer event happened.
+ */
+data class PointerEventData(
+    /** Position in the viewport */
+    val clientX: Double,
+    val clientY: Double,
+    /** Position relative to the top left of the element the listener is on */
+    val x: Double,
+    val y: Double,
+    /** Size of the element the listener is on */
+    val width: Double,
+    val height: Double,
+    val button: Int,
+    val buttons: Int,
+    val shiftKey: Boolean,
+    val ctrlKey: Boolean,
+    val altKey: Boolean,
+    val metaKey: Boolean,
+) {
+    companion object {
+        internal const val JS = "(function(){ const r = e.currentTarget.getBoundingClientRect(); return {" +
+            "clientX: e.clientX, clientY: e.clientY, x: e.clientX - r.left, y: e.clientY - r.top, width: r.width, height: r.height, " +
+            "button: e.button, buttons: e.buttons, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, altKey: e.altKey, metaKey: e.metaKey" +
+            "} })()"
+    }
 }

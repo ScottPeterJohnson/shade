@@ -1,6 +1,10 @@
 package net.justmachinery.shade
 
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
 import kotlinx.html.HTML
 import net.justmachinery.futility.Json
 import net.justmachinery.futility.logging.KLogging
@@ -376,8 +380,31 @@ class Client(
      * Call shadeCb(data) to return data, or shadeErr(error) to throw an exception.
      */
     fun runWithCallback(@Language("JavaScript 1.8", prefix = "function cb(data){}; ", suffix = ";") js : String) : CompletableDeferred<Json> {
+        return runOneoffExpressionWithTemplate { id -> withCallbackFunctions(id, js) }
+    }
+
+    /**
+     * Run a JS snippet with the "shadeCb" and "shadeErr" functions in immediate scope, where shadeCb(data) may be
+     * called any number of times, e.g. by a page script reporting events as they happen. The returned flow emits the
+     * data of each call in order, and fails if shadeErr(error) is called. The snippet runs once per collection,
+     * and the callback is removed when collection stops.
+     */
+    fun callbackFlow(@Language("JavaScript 1.8", prefix = "function cb(data){}; ", suffix = ";") js : String) : Flow<Json> = kotlinx.coroutines.flow.callbackFlow {
+        val id = storeCallback(CallbackData(
+            callback = { trySend(it ?: Json("null")) },
+            errorHandler = ContextErrorHandler(previous = null, handle = {
+                this@callbackFlow.close(throwable)
+                true
+            }),
+            requireEventLock = true
+        ))
+        sendJavascript(id.toString()){ append(withCallbackFunctions(id, js)) }
+        awaitClose { removeCallback(id) }
+    }.buffer(Channel.UNLIMITED)
+
+    private fun withCallbackFunctions(id : Long, js : String) : String {
         val evalText = gson.toJson(js.take(256))
-        return runOneoffExpressionWithTemplate { id -> "(function(){ function shadeErr(e){ ${SocketScopeNames.sendIfError.raw}(e, $id, $evalText) }; function shadeCb(data){ ${SocketScopeNames.sendMessage.raw}($id, JSON.stringify(data)) }; $js; })()" }
+        return "(function(){ function shadeErr(e){ ${SocketScopeNames.sendIfError.raw}(e, $id, $evalText) }; function shadeCb(data){ ${SocketScopeNames.sendMessage.raw}($id, JSON.stringify(data)) }; $js; })()"
     }
 
     /**

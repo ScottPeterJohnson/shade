@@ -164,3 +164,17 @@ describe("reconciling components", () => {
         expect(document.body.textContent).toBe("beforechildchanged");
     });
 });
+
+describe("reconciling select options", () => {
+    it("moves the selection when the server moves an option's selected attribute, even after the user picked one", () => {
+        render('<select><option value="0" selected>a</option><option value="1">b</option></select>');
+        const select = document.querySelector("select")!;
+        select.value = "1";
+
+        update('<select><option value="0">a</option><option value="1" selected>b</option></select>');
+        expect(select.value).toBe("1");
+
+        update('<select><option value="0" selected>a</option><option value="1">b</option></select>');
+        expect(select.value).toBe("0");
+    });
+});

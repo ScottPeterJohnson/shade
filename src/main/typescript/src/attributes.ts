@@ -123,6 +123,9 @@ export function applyAttributeValue(target : HTMLElement, name : string, value :
             })
         }
     }
+    if(target instanceof HTMLOptionElement && name == "selected" && target.selected != (value != null)){
+        target.selected = value != null
+    }
 }
 
 function suppressChangeListeners(target : HTMLInputElement, cb : ()=>void){

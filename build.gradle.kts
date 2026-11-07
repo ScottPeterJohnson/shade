@@ -117,6 +117,7 @@ dependencies {
     testImplementation("ch.qos.logback:logback-core:1.5.38")
     testImplementation("org.slf4j:jcl-over-slf4j:2.0.17")
     testImplementation("org.junit.jupiter:junit-jupiter:6.1.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
     kspTest(project(":"))

@@ -26,8 +26,9 @@ class Select<T> : Component<Select.Props<T>>() {
             toString = { props.options.indexOf(it).toString() }
         ){
             props.customize.raw(this)
+            val selected = props.selected.get()
             props.options.forEachIndexed { index, value ->
-                add(SelectOption.Props(props.render, props.customizeOption, value, index))
+                add(SelectOption.Props(props.render, props.customizeOption, value, index, selected = value == selected))
             }
         }
     }
@@ -38,11 +39,13 @@ internal class SelectOption<T> : ComponentInTag<SelectOption.Props<T>, SELECT>()
         val render : EqLambda<(T)->String>,
         val customize : EqLambda<OPTION.(T)->Unit>,
         val value : T,
-        val index : Int
+        val index : Int,
+        val selected : Boolean
     ) : PropsType<Props<T>, SelectOption<T>>()
     override fun SELECT.render() {
         option {
             value = props.index.toString()
+            selected = props.selected
             +props.render.raw(props.value)
             props.customize.raw(this, props.value)
         }
