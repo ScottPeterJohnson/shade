@@ -1,6 +1,7 @@
 package net.justmachinery.shade.render
 
 import kotlinx.html.Tag
+import net.justmachinery.shade.AttributeNames
 import net.justmachinery.shade.component.AdvancedComponent
 import net.justmachinery.shade.component.doUnmount
 import net.justmachinery.shade.scriptTypeSignifier
@@ -116,7 +117,7 @@ internal class RenderTreeRecorder(
             val endingFrame = frameStack.pop()
             val parentFrame = frameStack.peek()
             endingFrame.newRenderTreeLocation.let {
-                it.key = tag.attributes["key"]
+                it.key = tag.attributes[AttributeNames.Key.raw]
                 parentFrame?.newRenderTreeLocation?.children?.add(RenderTreeChild.TagChild(it))
             }
 
@@ -167,8 +168,7 @@ internal fun unmountAll(root : RenderTreeLocation){
     }
 }
 /**
- * Unmounts a component that is leaving the render tree, and removes the event callbacks of its last render,
- * which would otherwise stay stored (and callable) for as long as the client lives.
+ * Unmounts a component that is leaving the render tree, and removes the event callbacks of its last render.
  */
 private fun AdvancedComponent<*, *>.unmountAndRemoveCallbacks(){
     doUnmount()

@@ -13,6 +13,7 @@ import net.justmachinery.shade.component.doUnmount
 import net.justmachinery.shade.render.renderRoot
 import net.justmachinery.shade.render.rerender
 import net.justmachinery.shade.state.batchChangesUntilSuspend
+import net.justmachinery.shade.utility.gson
 import org.intellij.lang.annotations.Language
 import org.slf4j.MDC
 import java.util.*
@@ -375,7 +376,8 @@ class Client(
      * Call shadeCb(data) to return data, or shadeErr(error) to throw an exception.
      */
     fun runWithCallback(@Language("JavaScript 1.8", prefix = "function cb(data){}; ", suffix = ";") js : String) : CompletableDeferred<Json> {
-        return runOneoffExpressionWithTemplate { id -> "(function(){ function shadeErr(e){ ${SocketScopeNames.sendIfError.raw}(e, $id, script.substring(0,256)) }; function shadeCb(data){ ${SocketScopeNames.sendMessage.raw}($id, JSON.stringify(data)) }; $js; })()" }
+        val evalText = gson.toJson(js.take(256))
+        return runOneoffExpressionWithTemplate { id -> "(function(){ function shadeErr(e){ ${SocketScopeNames.sendIfError.raw}(e, $id, $evalText) }; function shadeCb(data){ ${SocketScopeNames.sendMessage.raw}($id, JSON.stringify(data)) }; $js; })()" }
     }
 
     /**

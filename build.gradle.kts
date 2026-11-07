@@ -15,7 +15,7 @@ repositories {
 }
 
 group = "net.justmachinery"
-version = "1.0.0"
+version = "1.1.0"
 
 tasks.register<JavaExec>("testServer") {
     classpath = sourceSets["test"].runtimeClasspath

@@ -39,9 +39,8 @@ abstract class ReactiveObserver {
     }
 
     /**
-     * Subscribes to [atom] as soon as it is read, rather than at the end of the observing block: a change made between
-     * the two would otherwise find no observer to notify. Checking [observing] first keeps the steady state, where the
-     * atom was already read last run, to a plain set lookup instead of a write to the atom's concurrent set.
+     * Subscribes to [atom] as soon as it is read, so changes made while the observing block is still running are seen.
+     * Checking [observing] first keeps the common case (the atom was read last run too) to a plain set lookup.
      */
     internal fun recordObserved(block : ObserveBlock, atom : Atom){
         if(block.observed.add(atom) && atom !in observing){

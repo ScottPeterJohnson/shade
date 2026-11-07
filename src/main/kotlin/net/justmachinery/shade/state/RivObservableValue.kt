@@ -13,9 +13,18 @@ class RivObservableValue<T>(
     private val generate: ()->T
 ) : GetSet<T> {
     private var computed = ComputedValue({
-        manualValue = Maybe.Nothing()
-        generate()
+        val generated = generate()
+        if(manualValue is Maybe.Just){
+            manualValue = Maybe.Nothing()
+            //If the generated value is unchanged, the computed won't report a change, so we must
+            if(hasGenerated && lastGenerated == generated && atom.isObserved()){ atom.reportChanged() }
+        }
+        hasGenerated = true
+        lastGenerated = generated
+        generated
     })
+    private var hasGenerated = false
+    private var lastGenerated : T? = null
     @Volatile private var manualValue : Maybe<T> = Maybe.Nothing()
     private val atom = Atom()
 

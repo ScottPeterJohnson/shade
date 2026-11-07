@@ -72,4 +72,19 @@ class RivObservableTest {
         assertEquals(2, riv.get())
         r.dispose()
     }
+
+    @Test
+    fun `observers see the reset even when the generator produces the same value as before`() {
+        val source = observable(1)
+        val riv = rivObservable { source.value > 0 }
+        val seen = mutableListOf<Boolean>()
+        val r = reaction { seen.add(riv.get()) }
+
+        riv.set(false)
+        source.set(2)
+
+        assertEquals(true, riv.get())
+        assertEquals(listOf(true, false, true), seen)
+        r.dispose()
+    }
 }
