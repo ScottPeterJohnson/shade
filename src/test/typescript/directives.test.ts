@@ -141,3 +141,25 @@ describe("applyJs directives", () => {
         expect(sendIfError).toHaveBeenCalledTimes(1);
     });
 });
+
+describe("set attribute directives on nested elements", () => {
+    it("applies only an element's own directives, not those of elements nested inside it", () => {
+        render('<div id="outer">' + setAttribute("title", "outer") +
+            '<span id="inner">' + setAttribute("title", "inner") + '</span>' +
+            '<input id="field">' + setAttribute("title", "field", true) +
+            '</div>');
+        expect(document.getElementById("outer")!.getAttribute("title")).toBe("outer");
+
+        //The outer element's directive changes, so its attributes are worked out again
+        update('<div id="outer">' + setAttribute("title", "outer2") +
+            '<span id="inner">' + setAttribute("title", "inner") + '</span>' +
+            '<input id="field">' + setAttribute("title", "field", true) +
+            '</div>');
+
+        expect(document.getElementById("outer")!.getAttribute("title")).toBe("outer2");
+        expect(document.getElementById("inner")!.getAttribute("title")).toBe("inner");
+        expect(document.getElementById("field")!.getAttribute("title")).toBe("field");
+        expectNoScriptErrors();
+    });
+});
+

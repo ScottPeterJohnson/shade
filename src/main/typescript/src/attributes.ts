@@ -35,8 +35,10 @@ function noteOriginalAttribute(element : HTMLElement, name : string){
 const isSetAttributeDirective = `[${AttributeNames.DirectiveType}=${DirectiveType.SetAttribute}]`;
 const baseQueryIsSetAttributeDirective = `script[type=${scriptTypeSignifier}]${isSetAttributeDirective}`;
 function updateAttributeDirectives(target : HTMLElement){
-    //First, find all SetAttribute directives that apply to target
-    const applicable = Array.from(target.querySelectorAll(baseQueryIsSetAttributeDirective));
+    //First, find all SetAttribute directives that apply to target: its own children (other than those targeting a
+    //sibling of theirs), then the directives following it that target it as their sibling
+    const applicable = Array.from(target.querySelectorAll(
+        `:scope > ${baseQueryIsSetAttributeDirective}:not([${AttributeNames.TargetSiblingDirective}])`));
     let current : HTMLElement|null = target
     while(true){
         current = current.nextElementSibling as HTMLElement;
